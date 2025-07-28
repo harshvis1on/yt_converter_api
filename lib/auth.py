@@ -1,5 +1,5 @@
 import time
-import httpx
+import requests
 from typing import Optional, Dict, Any
 from fastapi import HTTPException
 from google.oauth2.credentials import Credentials
@@ -12,7 +12,7 @@ class TokenManager:
         self.google_token_info_url = "https://oauth2.googleapis.com/tokeninfo"
         self.youtube_api_url = "https://www.googleapis.com/youtube/v3"
     
-    async def validate_token(self, access_token: str) -> Dict[str, Any]:
+    def validate_token(self, access_token: str) -> Dict[str, Any]:  # Removed async
         """
         Validate Google OAuth token and return token info
         
@@ -26,42 +26,42 @@ class TokenManager:
             HTTPException: If token is invalid or expired
         """
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    self.google_token_info_url,
-                    params={"access_token": access_token}
+            response = requests.get(
+                self.google_token_info_url,
+                params={"access_token": access_token},
+                timeout=10.0
+            )
+            
+            if response.status_code == 400:
+                # Token is invalid or expired
+                raise HTTPException(
+                    status_code=401,
+                    detail="Token expired or invalid. Please re-authenticate."
                 )
-                
-                if response.status_code == 400:
-                    # Token is invalid or expired
-                    raise HTTPException(
-                        status_code=401,
-                        detail="Token expired or invalid. Please re-authenticate."
-                    )
-                elif response.status_code != 200:
-                    raise HTTPException(
-                        status_code=401,
-                        detail="Unable to validate token. Please try again."
-                    )
-                
-                token_info = response.json()
-                
-                # Check if token is expired
-                expires_in = int(token_info.get('expires_in', 0))
-                if expires_in <= 60:  # Token expires in less than 1 minute
-                    raise HTTPException(
-                        status_code=401,
-                        detail="Token will expire soon. Please re-authenticate."
-                    )
-                
-                return token_info
-                
-        except httpx.TimeoutException:
+            elif response.status_code != 200:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Unable to validate token. Please try again."
+                )
+            
+            token_info = response.json()
+            
+            # Check if token is expired
+            expires_in = int(token_info.get('expires_in', 0))
+            if expires_in <= 60:  # Token expires in less than 1 minute
+                raise HTTPException(
+                    status_code=401,
+                    detail="Token will expire soon. Please re-authenticate."
+                )
+            
+            return token_info
+            
+        except requests.exceptions.Timeout:
             raise HTTPException(
                 status_code=408,
                 detail="Token validation timed out. Please try again."
             )
-        except httpx.RequestError as e:
+        except requests.exceptions.RequestException as e:
             raise HTTPException(
                 status_code=503,
                 detail=f"Network error during token validation: {str(e)}"
@@ -150,19 +150,17 @@ class APIErrorHandler:
         return error_map.get(status_code, "An unexpected error occurred. Please try again.")
     
     @staticmethod
-    async def make_request_with_retry(
-        client: httpx.AsyncClient,
+    def make_request_with_retry(  # Removed async
         method: str,
         url: str,
         max_retries: int = 3,
         backoff_factor: float = 1.0,
         **kwargs
-    ) -> httpx.Response:
+    ) -> requests.Response:
         """
         Make HTTP request with exponential backoff retry logic
         
         Args:
-            client: httpx AsyncClient
             method: HTTP method (GET, POST, etc.)
             url: Request URL
             max_retries: Maximum number of retry attempts
@@ -179,34 +177,34 @@ class APIErrorHandler:
         
         for attempt in range(max_retries + 1):
             try:
-                response = await client.request(method, url, **kwargs)
+                response = requests.request(method, url, **kwargs)
                 
                 # Handle rate limiting
                 if response.status_code == 429:
                     retry_after = int(response.headers.get('Retry-After', backoff_factor * (2 ** attempt)))
                     if attempt < max_retries:
-                        await asyncio.sleep(retry_after)
+                        time.sleep(retry_after)
                         continue
                 
                 # Handle temporary server errors
                 if response.status_code in [502, 503, 504] and attempt < max_retries:
                     wait_time = backoff_factor * (2 ** attempt)
-                    await asyncio.sleep(wait_time)
+                    time.sleep(wait_time)
                     continue
                 
                 return response
                 
-            except httpx.TimeoutException as e:
+            except requests.exceptions.Timeout as e:
                 last_exception = e
                 if attempt < max_retries:
                     wait_time = backoff_factor * (2 ** attempt)
-                    await asyncio.sleep(wait_time)
+                    time.sleep(wait_time)
                     continue
-            except httpx.RequestError as e:
+            except requests.exceptions.RequestException as e:
                 last_exception = e
                 if attempt < max_retries:
                     wait_time = backoff_factor * (2 ** attempt)
-                    await asyncio.sleep(wait_time)
+                    time.sleep(wait_time)
                     continue
         
         # All retries failed
@@ -221,4 +219,4 @@ class APIErrorHandler:
                 detail=f"Request failed after {max_retries} attempts"
             )
 
-import asyncio
+# asyncio import removed - now using sync requests

@@ -31,7 +31,7 @@ api_error_handler = APIErrorHandler()
 
 # 📺 List user's uploaded videos
 @app.get("/list_user_videos")
-async def list_user_videos(request: Request):
+def list_user_videos(request: Request):
     auth = request.headers.get("Authorization")
     if not auth or not auth.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
@@ -40,51 +40,48 @@ async def list_user_videos(request: Request):
     
     try:
         # Validate token with comprehensive error handling
-        await token_manager.validate_token(token)
+        token_manager.validate_token(token)
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # Step 1: get uploads playlist ID with retry logic
-            try:
-                res = await api_error_handler.make_request_with_retry(
-                    client=client,
-                    method="GET",
-                    url=f"{YOUTUBE_API_URL}/channels",
-                    params={
-                        "part": "contentDetails,snippet",
-                        "mine": "true"
-                    },
-                    headers={"Authorization": f"Bearer {token}"}
-                )
-                
-                if res.status_code != 200:
-                    error_detail = res.text
-                    user_error = api_error_handler.get_user_friendly_error(res.status_code, error_detail)
-                    raise HTTPException(status_code=res.status_code, detail=user_error)
-                
-                channel_data = res.json()
-                if not channel_data.get("items"):
-                    raise HTTPException(status_code=404, detail="No YouTube channel found for this account")
-                
-                channel_info = channel_data["items"][0]
-                uploads_id = channel_info["contentDetails"]["relatedPlaylists"]["uploads"]
-                
-                # Step 2: get videos from playlist with retry logic
-                res2 = await api_error_handler.make_request_with_retry(
-                    client=client,
-                    method="GET",
-                    url=f"{YOUTUBE_API_URL}/playlistItems",
-                    params={
-                        "part": "snippet,contentDetails",
-                        "playlistId": uploads_id,
-                        "maxResults": 25
-                    },
-                    headers={"Authorization": f"Bearer {token}"}
-                )
-                
-                if res2.status_code != 200:
-                    error_detail = res2.text
-                    user_error = api_error_handler.get_user_friendly_error(res2.status_code, error_detail)
-                    raise HTTPException(status_code=res2.status_code, detail=user_error)
+        # Step 1: get uploads playlist ID 
+        try:
+            res = requests.get(
+                f"{YOUTUBE_API_URL}/channels",
+                params={
+                    "part": "contentDetails,snippet",
+                    "mine": "true"
+                },
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=30
+            )
+            
+            if res.status_code != 200:
+                error_detail = res.text
+                user_error = api_error_handler.get_user_friendly_error(res.status_code, error_detail)
+                raise HTTPException(status_code=res.status_code, detail=user_error)
+            
+            channel_data = res.json()
+            if not channel_data.get("items"):
+                raise HTTPException(status_code=404, detail="No YouTube channel found for this account")
+            
+            channel_info = channel_data["items"][0]
+            uploads_id = channel_info["contentDetails"]["relatedPlaylists"]["uploads"]
+            
+            # Step 2: get videos from playlist
+            res2 = requests.get(
+                f"{YOUTUBE_API_URL}/playlistItems",
+                params={
+                    "part": "snippet,contentDetails",
+                    "playlistId": uploads_id,
+                    "maxResults": 25
+                },
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=30
+            )
+            
+            if res2.status_code != 200:
+                error_detail = res2.text
+                user_error = api_error_handler.get_user_friendly_error(res2.status_code, error_detail)
+                raise HTTPException(status_code=res2.status_code, detail=user_error)
                 
                 videos_data = res2.json()
                 
