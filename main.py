@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 from fastapi import FastAPI, Query, HTTPException, Request
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 import requests
@@ -28,6 +29,14 @@ YOUTUBE_API_URL = "https://www.googleapis.com/youtube/v3"
 # Initialize auth utilities
 token_manager = TokenManager()
 api_error_handler = APIErrorHandler()
+
+# Request models
+class ConversionRequest(BaseModel):
+    video_id: str
+    content_type: str  # "audio" or "video"
+    title: str = ""
+    quality: str = "1080p"
+    api_key: str
 
 # Health check endpoint
 @app.get("/health")
@@ -135,16 +144,10 @@ def list_user_videos(request: Request):
 
 # 🚀 RapidAPI YouTube Conversion - Routes to correct API based on distribution type
 @app.post("/api/rapidapi/convert")
-def rapidapi_convert(
-    video_id: str,
-    content_type: str,  # "audio" or "video" - from user's distribution preference
-    title: str = "",
-    quality: str = "1080p",  # Maximum video quality available
-    api_key: str = Query(..., description="API key for authentication")
-):
+def rapidapi_convert(request: ConversionRequest):
     # Authenticate the request
     expected_api_key = os.getenv("CONVERSION_API_KEY", "your-secret-conversion-key")
-    if api_key != expected_api_key:
+    if request.api_key != expected_api_key:
         raise HTTPException(
             status_code=401, 
             detail="Invalid API key. Access denied to conversion service."
@@ -153,11 +156,11 @@ def rapidapi_convert(
     rapidapi_key = os.getenv("RAPIDAPI_KEY", "YOUR_RAPIDAPI_KEY")
     
     # Debug logging
-    print(f"[DEBUG] Converting video_id: {video_id}, content_type: {content_type}")
+    print(f"[DEBUG] Converting video_id: {request.video_id}, content_type: {request.content_type}")
     print(f"[DEBUG] RapidAPI key present: {'Yes' if rapidapi_key != 'YOUR_RAPIDAPI_KEY' else 'No'}")
     
     try:
-        if content_type.lower() == "audio":
+        if request.content_type.lower() == "audio":
             # Use YouTube MP3 Audio Video downloader for audio
             audio_host = "youtube-mp3-audio-video-downloader.p.rapidapi.com"
             
@@ -166,7 +169,7 @@ def rapidapi_convert(
             download_response = requests.get(
                 f"https://{audio_host}/download",
                 params={
-                    "videoId": video_id,
+                    "videoId": request.video_id,
                     "format": "mp3",
                     "quality": "320"  # 320kbps - maximum quality available
                 },
@@ -186,7 +189,7 @@ def rapidapi_convert(
             
             # Step 1: Get available quality options
             quality_response = requests.get(
-                f"https://{video_host}/get_available_quality/{video_id}",
+                f"https://{video_host}/get_available_quality/{request.video_id}",
                 headers={
                     "X-RapidAPI-Key": rapidapi_key,
                     "X-RapidAPI-Host": video_host
@@ -202,8 +205,8 @@ def rapidapi_convert(
             
             # Step 2: Download video with specified quality
             download_response = requests.get(
-                f"https://{video_host}/download_video/{video_id}",
-                params={"quality": quality},
+                f"https://{video_host}/download_video/{request.video_id}",
+                params={"quality": request.quality},
                 headers={
                     "X-RapidAPI-Key": rapidapi_key,
                     "X-RapidAPI-Host": video_host
@@ -219,10 +222,10 @@ def rapidapi_convert(
             
             # Try to get additional video info (works for video API)
             video_info = {}
-            if content_type.lower() == "video":
+            if request.content_type.lower() == "video":
                 try:
                     info_response = requests.get(
-                        f"https://youtube-video-fast-downloader-24-7.p.rapidapi.com/get-video-info/{video_id}",
+                        f"https://youtube-video-fast-downloader-24-7.p.rapidapi.com/get-video-info/{request.video_id}",
                         headers={
                             "X-RapidAPI-Key": rapidapi_key,
                             "X-RapidAPI-Host": "youtube-video-fast-downloader-24-7.p.rapidapi.com"
@@ -236,18 +239,18 @@ def rapidapi_convert(
             
             return {
                 "success": True,
-                "videoId": video_id,
-                "contentType": content_type,
+                "videoId": request.video_id,
+                "contentType": request.content_type,
                 "downloadUrl": data.get("download_url") or data.get("url") or data.get("link"),
-                "title": video_info.get("title") or data.get("title", title),
+                "title": video_info.get("title") or data.get("title", request.title),
                 "duration": video_info.get("duration") or data.get("duration"),
                 "fileSize": data.get("file_size") or data.get("size"),
-                "quality": data.get("quality", quality),
-                "format": data.get("format") or ("mp3" if content_type.lower() == "audio" else "mp4"),
+                "quality": data.get("quality", request.quality),
+                "format": data.get("format") or ("mp3" if request.content_type.lower() == "audio" else "mp4"),
                 "thumbnail": video_info.get("thumbnail") or data.get("thumbnail"),
                 "processedAt": datetime.utcnow().isoformat(),
                 "apiProvider": api_provider,
-                "distributionType": content_type
+                "distributionType": request.content_type
             }
         elif download_response.status_code == 429:
             raise HTTPException(
@@ -271,19 +274,19 @@ def rapidapi_convert(
             )
             
     except requests.exceptions.Timeout:
-        print(f"[ERROR] Timeout error for video_id: {video_id}")
+        print(f"[ERROR] Timeout error for video_id: {request.video_id}")
         raise HTTPException(
             status_code=504,
             detail="Conversion request timed out. Please try again."
         )
     except requests.exceptions.RequestException as e:
-        print(f"[ERROR] Request error for video_id: {video_id}, error: {str(e)}")
+        print(f"[ERROR] Request error for video_id: {request.video_id}, error: {str(e)}")
         raise HTTPException(
             status_code=502,
             detail=f"External API request failed: {str(e)}"
         )
     except Exception as e:
-        print(f"[ERROR] Unexpected error for video_id: {video_id}, error: {str(e)}")
+        print(f"[ERROR] Unexpected error for video_id: {request.video_id}, error: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Conversion service error: {str(e)}"
