@@ -257,7 +257,7 @@ def rapidapi_convert(request: ConversionRequest):
                 "success": True,
                 "videoId": request.video_id,
                 "contentType": request.content_type,
-                "downloadUrl": data.get("download_url") or data.get("url") or data.get("link") or data.get("downloadUrl") or data.get("download_link") or data.get("audio_url") or data.get("video_url") or data.get("file_url"),
+                "downloadUrl": data.get("file") or data.get("download_url") or data.get("url") or data.get("link"),
                 "title": video_info.get("title") or data.get("title", request.title),
                 "duration": video_info.get("duration") or data.get("duration"),
                 "fileSize": data.get("file_size") or data.get("size"),
