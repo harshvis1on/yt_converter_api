@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-import httpx
+import requests
 from lib.auth import TokenManager, APIErrorHandler
 from dotenv import load_dotenv
 
@@ -128,128 +128,127 @@ async def list_user_videos(request: Request):
 
 # 🚀 RapidAPI YouTube Conversion - Routes to correct API based on distribution type
 @app.post("/api/rapidapi/convert")
-async def rapidapi_convert(
+def rapidapi_convert(  # Changed from async to sync
     video_id: str,
     content_type: str,  # "audio" or "video" - from user's distribution preference
     title: str = "",
     quality: str = "1080p"  # Maximum video quality available
 ):
-    import httpx
-    import os
-    
     rapidapi_key = os.getenv("RAPIDAPI_KEY", "YOUR_RAPIDAPI_KEY")
     
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        if content_type.lower() == "audio":
+            # Use YouTube MP3 Audio Video downloader for audio
+            audio_host = "youtube-mp3-audio-video-downloader.p.rapidapi.com"
             
-            if content_type.lower() == "audio":
-                # Use YouTube MP3 Audio Video downloader for audio
-                audio_host = "youtube-mp3-audio-video-downloader.p.rapidapi.com"
-                
-                # Call audio conversion API (YouTube MP3 Audio Video downloader)
-                download_response = await client.get(
-                    f"https://{audio_host}/download",
-                    params={
-                        "videoId": video_id,
-                        "format": "mp3",
-                        "quality": "320"  # 320kbps - maximum quality available
-                    },
-                    headers={
-                        "X-RapidAPI-Key": rapidapi_key,
-                        "X-RapidAPI-Host": audio_host
-                    }
-                )
-                
-                api_provider = "YouTube MP3 Audio Video downloader"
-                
-            else:
-                # Use YouTube Video FAST Downloader 24/7 for video
-                video_host = "youtube-video-fast-downloader-24-7.p.rapidapi.com"
-                
-                # Step 1: Get available quality options
-                quality_response = await client.get(
-                    f"https://{video_host}/get_available_quality/{video_id}",
-                    headers={
-                        "X-RapidAPI-Key": rapidapi_key,
-                        "X-RapidAPI-Host": video_host
-                    }
-                )
-                
-                if quality_response.status_code != 200:
-                    raise HTTPException(
-                        status_code=quality_response.status_code,
-                        detail=f"Failed to get video quality options: {quality_response.text}"
-                    )
-                
-                # Step 2: Download video with specified quality
-                download_response = await client.get(
-                    f"https://{video_host}/download_video/{video_id}",
-                    params={"quality": quality},
-                    headers={
-                        "X-RapidAPI-Key": rapidapi_key,
-                        "X-RapidAPI-Host": video_host
-                    }
-                )
-                
-                api_provider = "YouTube Video FAST Downloader 24/7"
-            
-            # Handle response from either API
-            if download_response.status_code == 200:
-                data = download_response.json()
-                
-                # Try to get additional video info (works for video API)
-                video_info = {}
-                if content_type.lower() == "video":
-                    try:
-                        info_response = await client.get(
-                            f"https://youtube-video-fast-downloader-24-7.p.rapidapi.com/get-video-info/{video_id}",
-                            headers={
-                                "X-RapidAPI-Key": rapidapi_key,
-                                "X-RapidAPI-Host": "youtube-video-fast-downloader-24-7.p.rapidapi.com"
-                            }
-                        )
-                        if info_response.status_code == 200:
-                            video_info = info_response.json()
-                    except:
-                        pass  # Continue without extra info if it fails
-                
-                return {
-                    "success": True,
+            # Call audio conversion API (YouTube MP3 Audio Video downloader)
+            download_response = requests.get(
+                f"https://{audio_host}/download",
+                params={
                     "videoId": video_id,
-                    "contentType": content_type,
-                    "downloadUrl": data.get("download_url") or data.get("url") or data.get("link"),
-                    "title": video_info.get("title") or data.get("title", title),
-                    "duration": video_info.get("duration") or data.get("duration"),
-                    "fileSize": data.get("file_size") or data.get("size"),
-                    "quality": data.get("quality", quality),
-                    "format": data.get("format") or ("mp3" if content_type.lower() == "audio" else "mp4"),
-                    "thumbnail": video_info.get("thumbnail") or data.get("thumbnail"),
-                    "processedAt": datetime.utcnow().isoformat(),
-                    "apiProvider": api_provider,
-                    "distributionType": content_type
-                }
-            elif download_response.status_code == 429:
+                    "format": "mp3",
+                    "quality": "320"  # 320kbps - maximum quality available
+                },
+                headers={
+                    "X-RapidAPI-Key": rapidapi_key,
+                    "X-RapidAPI-Host": audio_host
+                },
+                timeout=60
+            )
+            
+            api_provider = "YouTube MP3 Audio Video downloader"
+            
+        else:
+            # Use YouTube Video FAST Downloader 24/7 for video
+            video_host = "youtube-video-fast-downloader-24-7.p.rapidapi.com"
+            
+            # Step 1: Get available quality options
+            quality_response = requests.get(
+                f"https://{video_host}/get_available_quality/{video_id}",
+                headers={
+                    "X-RapidAPI-Key": rapidapi_key,
+                    "X-RapidAPI-Host": video_host
+                },
+                timeout=30
+            )
+            
+            if quality_response.status_code != 200:
                 raise HTTPException(
-                    status_code=429,
-                    detail=f"Rate limit exceeded for {api_provider}. Please try again in a few minutes."
+                    status_code=quality_response.status_code,
+                    detail=f"Failed to get video quality options: {quality_response.text}"
                 )
-            elif download_response.status_code == 404:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Video not found, private, or unavailable for conversion."
-                )
-            elif download_response.status_code == 403:
-                raise HTTPException(
-                    status_code=403,
-                    detail="Video access denied. May be restricted or require authentication."
-                )
-            else:
-                raise HTTPException(
-                    status_code=download_response.status_code,
-                    detail=f"Conversion failed via {api_provider}: {download_response.text}"
-                )
-                
-    except httpx.TimeoutException:
+            
+            # Step 2: Download video with specified quality
+            download_response = requests.get(
+                f"https://{video_host}/download_video/{video_id}",
+                params={"quality": quality},
+                headers={
+                    "X-RapidAPI-Key": rapidapi_key,
+                    "X-RapidAPI-Host": video_host
+                },
+                timeout=60
+            )
+            
+            api_provider = "YouTube Video FAST Downloader 24/7"
+        
+        # Handle response from either API
+        if download_response.status_code == 200:
+            data = download_response.json()
+            
+            # Try to get additional video info (works for video API)
+            video_info = {}
+            if content_type.lower() == "video":
+                try:
+                    info_response = requests.get(
+                        f"https://youtube-video-fast-downloader-24-7.p.rapidapi.com/get-video-info/{video_id}",
+                        headers={
+                            "X-RapidAPI-Key": rapidapi_key,
+                            "X-RapidAPI-Host": "youtube-video-fast-downloader-24-7.p.rapidapi.com"
+                        },
+                        timeout=30
+                    )
+                    if info_response.status_code == 200:
+                        video_info = info_response.json()
+                except:
+                    pass  # Continue without extra info if it fails
+            
+            return {
+                "success": True,
+                "videoId": video_id,
+                "contentType": content_type,
+                "downloadUrl": data.get("download_url") or data.get("url") or data.get("link"),
+                "title": video_info.get("title") or data.get("title", title),
+                "duration": video_info.get("duration") or data.get("duration"),
+                "fileSize": data.get("file_size") or data.get("size"),
+                "quality": data.get("quality", quality),
+                "format": data.get("format") or ("mp3" if content_type.lower() == "audio" else "mp4"),
+                "thumbnail": video_info.get("thumbnail") or data.get("thumbnail"),
+                "processedAt": datetime.utcnow().isoformat(),
+                "apiProvider": api_provider,
+                "distributionType": content_type
+            }
+        elif download_response.status_code == 429:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded for {api_provider}. Please try again in a few minutes."
+            )
+        elif download_response.status_code == 404:
+            raise HTTPException(
+                status_code=404,
+                detail="Video not found, private, or unavailable for conversion."
+            )
+        elif download_response.status_code == 403:
+            raise HTTPException(
+                status_code=403,
+                detail="Video access denied. May be restricted or require authentication."
+            )
+        else:
+            raise HTTPException(
+                status_code=download_response.status_code,
+                detail=f"Conversion failed via {api_provider}: {download_response.text}"
+            )
+            
+    except requests.exceptions.Timeout:
         raise HTTPException(
             status_code=504,
             detail="Conversion request timed out. Please try again."
