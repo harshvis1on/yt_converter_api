@@ -168,83 +168,68 @@ def rapidapi_convert(request: ConversionRequest):
     
     try:
         if request.content_type.lower() == "audio":
-            # Use YouTube MP3 Audio Video downloader for audio
+            # Use the correct YouTube MP3 Audio Video downloader endpoint
             audio_host = "youtube-mp3-audio-video-downloader.p.rapidapi.com"
             api_provider = "YouTube MP3 Audio Video downloader"
             
-            # Try different possible endpoints for this API
-            audio_endpoints = [
-                {"path": "/download", "params": {"url": f"https://youtube.com/watch?v={request.video_id}"}},
-                {"path": "/mp3", "params": {"url": f"https://youtube.com/watch?v={request.video_id}"}},
-                {"path": "/convert", "params": {"videoId": request.video_id, "format": "mp3", "quality": "320"}},
-                {"path": "/api/convert", "params": {"url": f"https://youtube.com/watch?v={request.video_id}", "format": "mp3"}},
-            ]
+            print(f"[DEBUG] Calling audio API: {audio_host}")
+            print(f"[DEBUG] Using endpoint: /get_m4a_download_link/{request.video_id}")
             
-            download_response = None
-            for endpoint in audio_endpoints:
-                print(f"[DEBUG] Trying audio endpoint: {audio_host}{endpoint['path']}")
-                try:
-                    download_response = requests.get(
-                        f"https://{audio_host}{endpoint['path']}",
-                        params=endpoint["params"],
-                        headers={
-                            "X-RapidAPI-Key": rapidapi_key,
-                            "X-RapidAPI-Host": audio_host
-                        },
-                        timeout=60
+            try:
+                download_response = requests.get(
+                    f"https://{audio_host}/get_m4a_download_link/{request.video_id}",
+                    headers={
+                        "X-RapidAPI-Key": rapidapi_key,
+                        "X-RapidAPI-Host": audio_host
+                    },
+                    timeout=60
+                )
+                print(f"[DEBUG] Audio API response status: {download_response.status_code}")
+                
+                if download_response.status_code != 200:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Audio conversion failed: {download_response.text}"
                     )
-                    print(f"[DEBUG] Audio endpoint {endpoint['path']} response: {download_response.status_code}")
-                    if download_response.status_code == 200:
-                        print(f"[DEBUG] Success with audio endpoint: {endpoint['path']}")
-                        break
-                except Exception as e:
-                    print(f"[DEBUG] Audio endpoint {endpoint['path']} error: {e}")
-                    continue
-            
-            if not download_response or download_response.status_code != 200:
+                    
+            except requests.exceptions.RequestException as e:
+                print(f"[ERROR] Audio API request failed: {e}")
                 raise HTTPException(
                     status_code=502,
-                    detail=f"All endpoints for {api_provider} returned errors. API may be down or require different subscription."
+                    detail=f"Audio API request failed: {str(e)}"
                 )
             
         else:
-            # Use YouTube Video FAST Downloader 24/7 for video
+            # Use the correct YouTube Video FAST Downloader 24/7 endpoint
             video_host = "youtube-video-fast-downloader-24-7.p.rapidapi.com"
             api_provider = "YouTube Video FAST Downloader 24/7"
             
-            # Try different possible endpoints for this API
-            video_endpoints = [
-                {"path": f"/download/{request.video_id}", "params": {"quality": request.quality}},
-                {"path": "/download", "params": {"url": f"https://youtube.com/watch?v={request.video_id}", "quality": request.quality}},
-                {"path": f"/video/{request.video_id}", "params": {"quality": request.quality}},
-                {"path": "/api/download", "params": {"videoId": request.video_id, "format": "mp4", "quality": request.quality}},
-            ]
+            print(f"[DEBUG] Calling video API: {video_host}")
+            print(f"[DEBUG] Using endpoint: /download_video/{request.video_id}")
             
-            download_response = None
-            for endpoint in video_endpoints:
-                print(f"[DEBUG] Trying video endpoint: {video_host}{endpoint['path']}")
-                try:
-                    download_response = requests.get(
-                        f"https://{video_host}{endpoint['path']}",
-                        params=endpoint["params"],
-                        headers={
-                            "X-RapidAPI-Key": rapidapi_key,
-                            "X-RapidAPI-Host": video_host
-                        },
-                        timeout=60
+            try:
+                download_response = requests.get(
+                    f"https://{video_host}/download_video/{request.video_id}",
+                    params={"quality": request.quality},
+                    headers={
+                        "X-RapidAPI-Key": rapidapi_key,
+                        "X-RapidAPI-Host": video_host
+                    },
+                    timeout=60
+                )
+                print(f"[DEBUG] Video API response status: {download_response.status_code}")
+                
+                if download_response.status_code != 200:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"Video conversion failed: {download_response.text}"
                     )
-                    print(f"[DEBUG] Video endpoint {endpoint['path']} response: {download_response.status_code}")
-                    if download_response.status_code == 200:
-                        print(f"[DEBUG] Success with video endpoint: {endpoint['path']}")
-                        break
-                except Exception as e:
-                    print(f"[DEBUG] Video endpoint {endpoint['path']} error: {e}")
-                    continue
                     
-            if not download_response or download_response.status_code != 200:
+            except requests.exceptions.RequestException as e:
+                print(f"[ERROR] Video API request failed: {e}")
                 raise HTTPException(
                     status_code=502,
-                    detail=f"All endpoints for {api_provider} returned errors. API may be down or require different subscription."
+                    detail=f"Video API request failed: {str(e)}"
                 )
         
         # Handle response from either API
@@ -263,22 +248,9 @@ def rapidapi_convert(request: ConversionRequest):
                     detail=f"Invalid JSON response from {api_provider}: {json_error}"
                 )
             
-            # Try to get additional video info (works for video API)
+            # Try to get additional video info from the response or other sources
             video_info = {}
-            if request.content_type.lower() == "video":
-                try:
-                    info_response = requests.get(
-                        f"https://youtube-video-fast-downloader-24-7.p.rapidapi.com/get-video-info/{request.video_id}",
-                        headers={
-                            "X-RapidAPI-Key": rapidapi_key,
-                            "X-RapidAPI-Host": "youtube-video-fast-downloader-24-7.p.rapidapi.com"
-                        },
-                        timeout=30
-                    )
-                    if info_response.status_code == 200:
-                        video_info = info_response.json()
-                except:
-                    pass  # Continue without extra info if it fails
+            # Most modern APIs include video info in the main response, so we'll extract from data
             
             return {
                 "success": True,
