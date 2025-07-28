@@ -143,7 +143,6 @@ def list_user_videos(request: Request):
 # The /api/rapidapi/convert endpoint below handles all conversions
 
 # 🚀 RapidAPI YouTube Conversion - Routes to correct API based on distribution type
-# Updated to use working alternative APIs due to 404 errors with original endpoints
 @app.post("/api/rapidapi/convert")
 def rapidapi_convert(request: ConversionRequest):
     # Authenticate the request
@@ -167,93 +166,86 @@ def rapidapi_convert(request: ConversionRequest):
             detail="RapidAPI key not configured. Please set RAPIDAPI_KEY environment variable."
         )
     
-    # Define multiple API providers to try as fallbacks
-    audio_apis = [
-        {
-            "name": "Youtube To Mp3 Download",
-            "host": "youtube-to-mp3-download.p.rapidapi.com", 
-            "endpoint": "/mp3",
-            "params": {"url": f"https://www.youtube.com/watch?v={request.video_id}"}
-        },
-        {
-            "name": "YouTube Media Downloader",
-            "host": "youtube-media-downloader.p.rapidapi.com",
-            "endpoint": "/download",
-            "params": {"videoId": request.video_id, "format": "mp3"}
-        },
-        {
-            "name": "Free MP3-MP4 YouTube",
-            "host": "free-mp3-mp4-youtube.p.rapidapi.com",
-            "endpoint": "/mp3", 
-            "params": {"url": f"https://www.youtube.com/watch?v={request.video_id}"}
-        }
-    ]
-    
-    video_apis = [
-        {
-            "name": "YouTube Media Downloader", 
-            "host": "youtube-media-downloader.p.rapidapi.com",
-            "endpoint": "/download",
-            "params": {"videoId": request.video_id, "format": "mp4", "quality": request.quality}
-        },
-        {
-            "name": "Free MP3-MP4 YouTube",
-            "host": "free-mp3-mp4-youtube.p.rapidapi.com", 
-            "endpoint": "/mp4",
-            "params": {"url": f"https://www.youtube.com/watch?v={request.video_id}", "quality": request.quality}
-        },
-        {
-            "name": "YouTube Downloader With MP3",
-            "host": "youtube-downloader-with-mp3.p.rapidapi.com",
-            "endpoint": "/json",
-            "params": {"url": f"https://www.youtube.com/watch?v={request.video_id}", "quality": request.quality}
-        }
-    ]
-
     try:
-        apis_to_try = audio_apis if request.content_type.lower() == "audio" else video_apis
-        download_response = None
-        api_provider = None
-        
-        # Try each API until one works
-        for api_config in apis_to_try:
-            print(f"[DEBUG] Trying {api_config['name']} API: {api_config['host']}")
+        if request.content_type.lower() == "audio":
+            # Use YouTube MP3 Audio Video downloader for audio
+            audio_host = "youtube-mp3-audio-video-downloader.p.rapidapi.com"
+            api_provider = "YouTube MP3 Audio Video downloader"
             
-            try:
-                download_response = requests.get(
-                    f"https://{api_config['host']}{api_config['endpoint']}",
-                    params=api_config['params'],
-                    headers={
-                        "X-RapidAPI-Key": rapidapi_key,
-                        "X-RapidAPI-Host": api_config['host']
-                    },
-                    timeout=60
-                )
-                
-                print(f"[DEBUG] {api_config['name']} response status: {download_response.status_code}")
-                
-                # If we get a successful response, use this API
-                if download_response.status_code == 200:
-                    api_provider = api_config['name']
-                    print(f"[DEBUG] Success with {api_provider}!")
-                    break
-                elif download_response.status_code == 404:
-                    print(f"[DEBUG] {api_config['name']} endpoint not found, trying next...")
+            # Try different possible endpoints for this API
+            audio_endpoints = [
+                {"path": "/download", "params": {"url": f"https://youtube.com/watch?v={request.video_id}"}},
+                {"path": "/mp3", "params": {"url": f"https://youtube.com/watch?v={request.video_id}"}},
+                {"path": "/convert", "params": {"videoId": request.video_id, "format": "mp3", "quality": "320"}},
+                {"path": "/api/convert", "params": {"url": f"https://youtube.com/watch?v={request.video_id}", "format": "mp3"}},
+            ]
+            
+            download_response = None
+            for endpoint in audio_endpoints:
+                print(f"[DEBUG] Trying audio endpoint: {audio_host}{endpoint['path']}")
+                try:
+                    download_response = requests.get(
+                        f"https://{audio_host}{endpoint['path']}",
+                        params=endpoint["params"],
+                        headers={
+                            "X-RapidAPI-Key": rapidapi_key,
+                            "X-RapidAPI-Host": audio_host
+                        },
+                        timeout=60
+                    )
+                    print(f"[DEBUG] Audio endpoint {endpoint['path']} response: {download_response.status_code}")
+                    if download_response.status_code == 200:
+                        print(f"[DEBUG] Success with audio endpoint: {endpoint['path']}")
+                        break
+                except Exception as e:
+                    print(f"[DEBUG] Audio endpoint {endpoint['path']} error: {e}")
                     continue
-                else:
-                    print(f"[DEBUG] {api_config['name']} failed with status {download_response.status_code}: {download_response.text[:200]}")
+            
+            if not download_response or download_response.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"All endpoints for {api_provider} returned errors. API may be down or require different subscription."
+                )
+            
+        else:
+            # Use YouTube Video FAST Downloader 24/7 for video
+            video_host = "youtube-video-fast-downloader-24-7.p.rapidapi.com"
+            api_provider = "YouTube Video FAST Downloader 24/7"
+            
+            # Try different possible endpoints for this API
+            video_endpoints = [
+                {"path": f"/download/{request.video_id}", "params": {"quality": request.quality}},
+                {"path": "/download", "params": {"url": f"https://youtube.com/watch?v={request.video_id}", "quality": request.quality}},
+                {"path": f"/video/{request.video_id}", "params": {"quality": request.quality}},
+                {"path": "/api/download", "params": {"videoId": request.video_id, "format": "mp4", "quality": request.quality}},
+            ]
+            
+            download_response = None
+            for endpoint in video_endpoints:
+                print(f"[DEBUG] Trying video endpoint: {video_host}{endpoint['path']}")
+                try:
+                    download_response = requests.get(
+                        f"https://{video_host}{endpoint['path']}",
+                        params=endpoint["params"],
+                        headers={
+                            "X-RapidAPI-Key": rapidapi_key,
+                            "X-RapidAPI-Host": video_host
+                        },
+                        timeout=60
+                    )
+                    print(f"[DEBUG] Video endpoint {endpoint['path']} response: {download_response.status_code}")
+                    if download_response.status_code == 200:
+                        print(f"[DEBUG] Success with video endpoint: {endpoint['path']}")
+                        break
+                except Exception as e:
+                    print(f"[DEBUG] Video endpoint {endpoint['path']} error: {e}")
                     continue
                     
-            except Exception as api_error:
-                print(f"[DEBUG] {api_config['name']} error: {api_error}")
-                continue
-        
-        # If no API worked, raise an error
-        if not download_response or download_response.status_code != 200:
-            raise HTTPException(
-                status_code=503,
-                detail="All YouTube downloader APIs are currently unavailable. Please try again later."
-            )
+            if not download_response or download_response.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"All endpoints for {api_provider} returned errors. API may be down or require different subscription."
+                )
         
         # Handle response from either API
         print(f"[DEBUG] API response status: {download_response.status_code}")
@@ -271,20 +263,34 @@ def rapidapi_convert(request: ConversionRequest):
                     detail=f"Invalid JSON response from {api_provider}: {json_error}"
                 )
             
-            # Video info will be included in the main response from the new API
+            # Try to get additional video info (works for video API)
             video_info = {}
+            if request.content_type.lower() == "video":
+                try:
+                    info_response = requests.get(
+                        f"https://youtube-video-fast-downloader-24-7.p.rapidapi.com/get-video-info/{request.video_id}",
+                        headers={
+                            "X-RapidAPI-Key": rapidapi_key,
+                            "X-RapidAPI-Host": "youtube-video-fast-downloader-24-7.p.rapidapi.com"
+                        },
+                        timeout=30
+                    )
+                    if info_response.status_code == 200:
+                        video_info = info_response.json()
+                except:
+                    pass  # Continue without extra info if it fails
             
             return {
                 "success": True,
                 "videoId": request.video_id,
                 "contentType": request.content_type,
-                "downloadUrl": data.get("download_url") or data.get("url") or data.get("link") or data.get("download"),
-                "title": data.get("title", request.title),
-                "duration": data.get("duration") or data.get("length"),
-                "fileSize": data.get("file_size") or data.get("size") or data.get("filesize"),
+                "downloadUrl": data.get("download_url") or data.get("url") or data.get("link"),
+                "title": video_info.get("title") or data.get("title", request.title),
+                "duration": video_info.get("duration") or data.get("duration"),
+                "fileSize": data.get("file_size") or data.get("size"),
                 "quality": data.get("quality", request.quality),
                 "format": data.get("format") or ("mp3" if request.content_type.lower() == "audio" else "mp4"),
-                "thumbnail": data.get("thumbnail") or data.get("thumb"),
+                "thumbnail": video_info.get("thumbnail") or data.get("thumbnail"),
                 "processedAt": datetime.utcnow().isoformat(),
                 "apiProvider": api_provider,
                 "distributionType": request.content_type
