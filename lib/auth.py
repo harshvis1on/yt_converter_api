@@ -2,8 +2,6 @@ import time
 import requests
 from typing import Optional, Dict, Any
 from fastapi import HTTPException
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request as GoogleRequest
 
 class TokenManager:
     """Handles OAuth token validation, refresh, and error handling"""
@@ -67,56 +65,7 @@ class TokenManager:
                 detail=f"Network error during token validation: {str(e)}"
             )
     
-    def create_credentials(self, access_token: str, refresh_token: Optional[str] = None) -> Credentials:
-        """
-        Create Google OAuth credentials object
-        
-        Args:
-            access_token: The OAuth access token
-            refresh_token: Optional refresh token for token renewal
-            
-        Returns:
-            Google Credentials object
-        """
-        return Credentials(
-            token=access_token,
-            refresh_token=refresh_token,
-            token_uri="https://oauth2.googleapis.com/token",
-            client_id=None,  # Will be set from environment if needed for refresh
-            client_secret=None
-        )
-    
-    def refresh_token_if_needed(self, credentials: Credentials) -> Credentials:
-        """
-        Refresh token if expired or close to expiry
-        
-        Args:
-            credentials: Google Credentials object
-            
-        Returns:
-            Updated credentials with fresh token
-            
-        Raises:
-            HTTPException: If token refresh fails
-        """
-        try:
-            if not credentials.valid:
-                if credentials.expired and credentials.refresh_token:
-                    # Attempt to refresh the token
-                    credentials.refresh(GoogleRequest())
-                    return credentials
-                else:
-                    raise HTTPException(
-                        status_code=401,
-                        detail="Token expired and no refresh token available. Please re-authenticate."
-                    )
-            return credentials
-            
-        except Exception as e:
-            raise HTTPException(
-                status_code=401,
-                detail=f"Failed to refresh token: {str(e)}. Please re-authenticate."
-            )
+    # Google OAuth credential methods removed - not used in current implementation
 
 class APIErrorHandler:
     """Handles API errors with user-friendly messages and retry logic"""
