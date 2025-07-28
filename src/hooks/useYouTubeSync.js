@@ -28,7 +28,7 @@ export function useYouTubeSync() {
     let podcastId = localStorage.getItem('podcastId');
     if (!podcastId) {
       const currentPodcast = safeGetItem('currentPodcast');
-      podcastId = currentPodcast?.id || currentPodcast?.megaphone_id;
+      podcastId = currentPodcast?.megaphone_id || currentPodcast?.id;
     }
     
     if (channelData || videosData?.length > 0 || podcastId) {
@@ -94,11 +94,11 @@ export function useYouTubeSync() {
         }
       }
       
-      // Try multiple sources for podcast ID
+      // Try multiple sources for podcast ID - prioritize megaphone_id for API calls
       let finalPodcastId = podcastId || localStorage.getItem('podcastId');
       if (!finalPodcastId) {
         const currentPodcast = safeGetItem('currentPodcast');
-        finalPodcastId = currentPodcast?.id || currentPodcast?.megaphone_id;
+        finalPodcastId = currentPodcast?.megaphone_id || currentPodcast?.id;
       }
       
       setState(s => ({ 
@@ -131,11 +131,11 @@ export function useYouTubeSync() {
     
     setState(s => ({ ...s, loading: true, progress: 0, total: videos.length, done: false, episodes: [], status: 'Creating podcast episodes...' }));
     
-    // Try multiple sources for podcast ID
+    // Try multiple sources for podcast ID - prioritize megaphone_id for API calls
     let podcastId = state.podcastId || localStorage.getItem('podcastId');
     if (!podcastId) {
       const currentPodcast = safeGetItem('currentPodcast');
-      podcastId = currentPodcast?.id || currentPodcast?.megaphone_id;
+      podcastId = currentPodcast?.megaphone_id || currentPodcast?.id;
     }
     
     const userInfo = safeGetItem('user_info', {});
@@ -310,7 +310,7 @@ export function useYouTubeSync() {
     let podcastId = localStorage.getItem('podcastId');
     if (!podcastId) {
       const currentPodcast = safeGetItem('currentPodcast');
-      podcastId = currentPodcast?.id || currentPodcast?.megaphone_id;
+      podcastId = currentPodcast?.megaphone_id || currentPodcast?.id;
     }
     
     setState(s => ({
