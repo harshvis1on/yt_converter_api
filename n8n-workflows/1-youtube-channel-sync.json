@@ -1,0 +1,163 @@
+{
+  "name": "1. YouTube Channel Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "youtube-sync",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-start",
+      "name": "YouTube Sync Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/channels",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $json.accessToken }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet,contentDetails,statistics"
+            },
+            {
+              "name": "mine",
+              "value": "true"
+            }
+          ]
+        }
+      },
+      "id": "youtube-channel",
+      "name": "Get YouTube Channel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/youtube/v3/playlistItems",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $('YouTube Sync Webhook').first().json.accessToken }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet,contentDetails"
+            },
+            {
+              "name": "playlistId",
+              "value": "={{ $json.items[0].contentDetails.relatedPlaylists.uploads }}"
+            },
+            {
+              "name": "maxResults",
+              "value": "25"
+            }
+          ]
+        }
+      },
+      "id": "youtube-videos",
+      "name": "Get YouTube Videos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "channelData",
+              "value": "={{ JSON.stringify({ id: $('Get YouTube Channel').first().json.items[0].id, title: $('Get YouTube Channel').first().json.items[0].snippet.title, description: $('Get YouTube Channel').first().json.items[0].snippet.description, subscriberCount: $('Get YouTube Channel').first().json.items[0].statistics.subscriberCount, videoCount: $('Get YouTube Channel').first().json.items[0].statistics.videoCount, uploadsPlaylistId: $('Get YouTube Channel').first().json.items[0].contentDetails.relatedPlaylists.uploads }) }}"
+            },
+            {
+              "name": "videosData",
+              "value": "={{ JSON.stringify($json.items.map(item => ({ videoId: item.snippet.resourceId.videoId, title: item.snippet.title, description: item.snippet.description, publishedAt: item.snippet.publishedAt, thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.medium?.url, position: item.snippet.position }))) }}"
+            }
+          ]
+        }
+      },
+      "id": "format-data",
+      "name": "Format Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, channel: JSON.parse($('Format Data').first().json.channelData), videos: JSON.parse($('Format Data').first().json.videosData), message: 'YouTube channel data fetched successfully - ready for podcast creation form', prefillData: { title: JSON.parse($('Format Data').first().json.channelData).title, description: JSON.parse($('Format Data').first().json.channelData).description, author: JSON.parse($('Format Data').first().json.channelData).title, link: 'https://www.youtube.com/channel/' + JSON.parse($('Format Data').first().json.channelData).id, language: 'en', primaryCategory: 'Technology', explicit: 'clean', podcastType: 'serial' } } }}"
+      },
+      "id": "response",
+      "name": "Return Channel Data",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "YouTube Sync Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get YouTube Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get YouTube Channel": {
+      "main": [
+        [
+          {
+            "node": "Get YouTube Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get YouTube Videos": {
+      "main": [
+        [
+          {
+            "node": "Format Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Data": {
+      "main": [
+        [
+          {
+            "node": "Return Channel Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

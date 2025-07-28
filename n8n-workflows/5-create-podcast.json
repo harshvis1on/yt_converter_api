@@ -1,0 +1,303 @@
+{
+  "name": "5. Create Podcast with Airwallex Integration",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "create-podcast",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-start",
+      "name": "Create Podcast Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "subtitle",
+              "value": "={{ $json.description ? $json.description.split('.')[0].substring(0, 100) : 'Podcast from YouTube channel' }}"
+            },
+            {
+              "name": "summary", 
+              "value": "={{ $json.description || 'Podcast created from YouTube channel content' }}"
+            },
+            {
+              "name": "slug",
+              "value": "={{ $json.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').substring(0, 50) }}"
+            },
+            {
+              "name": "itunesCategories",
+              "value": "={{ $json.secondaryCategory ? [$json.primaryCategory, $json.secondaryCategory] : [$json.primaryCategory] }}"
+            },
+            {
+              "name": "optimalTransferMethod",
+              "value": "={{ (() => { const localCountries = ['US', 'CA', 'GB', 'AU', 'SG', 'HK', 'JP', 'DE', 'FR', 'NL', 'CN', 'IN', 'ID', 'KR', 'MY', 'NZ', 'PH', 'TH', 'VN', 'BD', 'NP', 'PK', 'LK', 'TR', 'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NO', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'CH', 'AR', 'BO', 'BR', 'CL', 'CO', 'MX', 'PE', 'PY', 'UY', 'BH', 'IL', 'AE']; return localCountries.includes($json.bankCountry) ? 'LOCAL' : 'SWIFT'; })() }}"
+            }
+          ]
+        }
+      },
+      "id": "prepare-data",
+      "name": "Prepare Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.airwallex.com/api/v1/beneficiaries",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.AIRWALLEX_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-version",
+              "value": "2019-09-09"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify({ entity_type: $('Create Podcast Webhook').first().json.beneficiaryEntityType, individual: $('Create Podcast Webhook').first().json.beneficiaryEntityType === 'PERSONAL' ? { first_name: $('Create Podcast Webhook').first().json.beneficiaryFirstName, last_name: $('Create Podcast Webhook').first().json.beneficiaryLastName } : null, company: $('Create Podcast Webhook').first().json.beneficiaryEntityType === 'COMPANY' ? { name: $('Create Podcast Webhook').first().json.beneficiaryName, registration_number: $('Create Podcast Webhook').first().json.companyRegistrationNumber || null } : null, address: { country_code: $('Create Podcast Webhook').first().json.country, state: $('Create Podcast Webhook').first().json.state || null, city: $('Create Podcast Webhook').first().json.city, street_address: $('Create Podcast Webhook').first().json.addressLine1 + ($('Create Podcast Webhook').first().json.addressLine2 ? ', ' + $('Create Podcast Webhook').first().json.addressLine2 : ''), postcode: $('Create Podcast Webhook').first().json.postalCode || null }, bank_details: { account_name: $('Create Podcast Webhook').first().json.beneficiaryEntityType === 'PERSONAL' ? $('Create Podcast Webhook').first().json.beneficiaryFirstName + ' ' + $('Create Podcast Webhook').first().json.beneficiaryLastName : $('Create Podcast Webhook').first().json.beneficiaryName, account_number: $('Create Podcast Webhook').first().json.accountNumber, bank_country_code: $('Create Podcast Webhook').first().json.bankCountry, account_currency: $('Create Podcast Webhook').first().json.accountCurrency, bank_name: $('Create Podcast Webhook').first().json.bankName, swift_code: $('Create Podcast Webhook').first().json.swiftCode || null, aba: $('Create Podcast Webhook').first().json.routingNumber && $('Create Podcast Webhook').first().json.bankCountry === 'US' ? $('Create Podcast Webhook').first().json.routingNumber : null, local_clearing_system: $('Prepare Data').first().json.optimalTransferMethod === 'LOCAL' ? ($('Create Podcast Webhook').first().json.bankCountry === 'US' ? 'ach' : $('Create Podcast Webhook').first().json.bankCountry === 'GB' ? 'fps' : null) : null } }) }}"
+      },
+      "id": "create-airwallex-beneficiary",
+      "name": "Create Airwallex Beneficiary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://cms.megaphone.fm/api/networks/{{ $env.MEGAPHONE_NETWORK_ID }}/podcasts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Token token=\"{{ $env.MEGAPHONE_API_TOKEN }}\""
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify({ title: $('Create Podcast Webhook').first().json.title, subtitle: $('Prepare Data').first().json.subtitle, summary: $('Prepare Data').first().json.summary, itunesCategories: JSON.parse($('Prepare Data').first().json.itunesCategories), language: $('Create Podcast Webhook').first().json.language, link: $('Create Podcast Webhook').first().json.link, author: $('Create Podcast Webhook').first().json.author, explicit: $('Create Podcast Webhook').first().json.explicit, podcastType: $('Create Podcast Webhook').first().json.podcastType, distributionType: $('Create Podcast Webhook').first().json.distributionType, slug: $('Prepare Data').first().json.slug }) }}"
+      },
+      "id": "create-megaphone-podcast",
+      "name": "Create Megaphone Podcast",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [900, 300],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "{{ $env.SUPABASE_URL }}/rest/v1/podcasts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SUPABASE_SERVICE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "apikey",
+              "value": "{{ $env.SUPABASE_SERVICE_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyContentType": "json",
+        "jsonBody": "={{ JSON.stringify({ user_id: $('Create Podcast Webhook').first().json.userId, megaphone_podcast_id: $('Create Megaphone Podcast').first().json.id, title: $('Create Podcast Webhook').first().json.title, description: $('Create Podcast Webhook').first().json.description || $('Create Podcast Webhook').first().json.summary, channel_id: $('Create Podcast Webhook').first().json.channelId, podcast_type: $('Create Podcast Webhook').first().json.podcastType, distribution_type: $('Create Podcast Webhook').first().json.distributionType, explicit_content: $('Create Podcast Webhook').first().json.explicit, language: $('Create Podcast Webhook').first().json.language, categories: JSON.stringify($('Create Podcast Webhook').first().json.itunesCategories || []), ad_volume: $('Create Podcast Webhook').first().json.adVolume, ad_placement: $('Create Podcast Webhook').first().json.adPlacement, payout_email: $('Create Podcast Webhook').first().json.payoutEmail, payout_method: 'bank_account', beneficiary_entity_type: $('Create Podcast Webhook').first().json.beneficiaryEntityType, transfer_method: $('Prepare Data').first().json.optimalTransferMethod, beneficiary_name: $('Create Podcast Webhook').first().json.beneficiaryEntityType === 'PERSONAL' ? $('Create Podcast Webhook').first().json.beneficiaryFirstName + ' ' + $('Create Podcast Webhook').first().json.beneficiaryLastName : $('Create Podcast Webhook').first().json.beneficiaryName, beneficiary_first_name: $('Create Podcast Webhook').first().json.beneficiaryFirstName || null, beneficiary_last_name: $('Create Podcast Webhook').first().json.beneficiaryLastName || null, company_registration_number: $('Create Podcast Webhook').first().json.companyRegistrationNumber || null, bank_country: $('Create Podcast Webhook').first().json.bankCountry, account_currency: $('Create Podcast Webhook').first().json.accountCurrency, bank_name: $('Create Podcast Webhook').first().json.bankName, account_number: $('Create Podcast Webhook').first().json.accountNumber, routing_number: $('Create Podcast Webhook').first().json.routingNumber, swift_code: $('Create Podcast Webhook').first().json.swiftCode || null, address_line1: $('Create Podcast Webhook').first().json.addressLine1, address_line2: $('Create Podcast Webhook').first().json.addressLine2, city: $('Create Podcast Webhook').first().json.city, state: $('Create Podcast Webhook').first().json.state, postal_code: $('Create Podcast Webhook').first().json.postalCode, country: $('Create Podcast Webhook').first().json.country, revenue_share: 70, payout_threshold: 25, payout_schedule: 'monthly', airwallex_beneficiary_id: $('Create Airwallex Beneficiary').first().json.id || null, airwallex_status: $('Create Airwallex Beneficiary').first().json.status || 'pending', status: 'active', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }) }}"
+      },
+      "id": "save-podcast-supabase",
+      "name": "Save Podcast to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "success-condition",
+              "leftValue": "={{ $('Create Megaphone Podcast').first().json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "exists"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-success",
+      "name": "Check Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, podcastId: $('Create Megaphone Podcast').first().json.id, podcast: { id: $('Create Megaphone Podcast').first().json.id, title: $('Create Podcast Webhook').first().json.title, description: $('Create Podcast Webhook').first().json.description || $('Create Podcast Webhook').first().json.summary, author: $('Create Podcast Webhook').first().json.author, language: $('Create Podcast Webhook').first().json.language, explicit: $('Create Podcast Webhook').first().json.explicit, link: $('Create Podcast Webhook').first().json.link, slug: $('Prepare Data').first().json.slug, distributionType: $('Create Podcast Webhook').first().json.distributionType, adVolume: $('Create Podcast Webhook').first().json.adVolume, adPlacement: $('Create Podcast Webhook').first().json.adPlacement, createdAt: new Date().toISOString() }, airwallex: { beneficiaryId: $('Create Airwallex Beneficiary').first().json.id || null, status: $('Create Airwallex Beneficiary').first().json.status || 'failed' }, message: 'Podcast created successfully!' } }}"
+      },
+      "id": "success-response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1560, 240]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, error: 'Failed to create podcast', details: { megaphone: $('Create Megaphone Podcast').first().json || null, airwallex: $('Create Airwallex Beneficiary').first().json || null, supabase: $('Save Podcast to Supabase').first().json || null }, message: 'There was an error creating your podcast. Please try again.' } }}"
+      },
+      "id": "error-response",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1560, 360]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "merge-results",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [1120, 400]
+    }
+  ],
+  "connections": {
+    "Create Podcast Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Data": {
+      "main": [
+        [
+          {
+            "node": "Create Airwallex Beneficiary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Airwallex Beneficiary": {
+      "main": [
+        [
+          {
+            "node": "Create Megaphone Podcast",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Create Megaphone Podcast": {
+      "main": [
+        [
+          {
+            "node": "Save Podcast to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Podcast to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Check Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Success": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Check Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

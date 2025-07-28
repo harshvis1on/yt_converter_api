@@ -1,0 +1,87 @@
+{
+  "name": "3. User Setup",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "user-setup",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-user-setup",
+      "name": "User Setup Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "googleId",
+              "value": "={{ $json.userInfo.id }}"
+            },
+            {
+              "name": "name",
+              "value": "={{ $json.userInfo.name }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.userInfo.email }}"
+            },
+            {
+              "name": "profilePicture",
+              "value": "={{ $json.userInfo.picture || '' }}"
+            },
+            {
+              "name": "googleToken",
+              "value": "={{ $json.googleToken }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prepare-user-data",
+      "name": "Prepare User Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: true,\n  userId: $json.googleId,\n  message: 'User setup completed successfully'\n} }}"
+      },
+      "id": "user-response",
+      "name": "User Setup Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "User Setup Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare User Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare User Data": {
+      "main": [
+        [
+          {
+            "node": "User Setup Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

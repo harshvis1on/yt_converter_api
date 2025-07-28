@@ -1,0 +1,206 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* PodPay Color Scheme */
+    --background: #FFFFFF;
+    --foreground: #1F2937;
+    --card: #FFFFFF;
+    --card-foreground: #1F2937;
+    --popover: #FFFFFF;
+    --popover-foreground: #1F2937;
+    --primary: #6C6BFF;
+    --primary-foreground: #FFFFFF;
+    --secondary: #C8AAFF;
+    --secondary-foreground: #1F2937;
+    --muted: #F8F9FA;
+    --muted-foreground: #6B7280;
+    --accent: #FFC896;
+    --accent-foreground: #1F2937;
+    --destructive: #EF4444;
+    --destructive-foreground: #FFFFFF;
+    --border: #E5E7EB;
+    --input: #F8F9FA;
+    --ring: #6C6BFF;
+    --radius: 0.5rem;
+    --chart-1: #6C6BFF;
+    --chart-2: #C8AAFF;
+    --chart-3: #FFC896;
+    --chart-4: #94A3B8;
+    --chart-5: #64748B;
+    --sidebar: linear-gradient(180deg, #6C6BFF 0%, #5A4FCF 100%);
+    --sidebar-foreground: #FFFFFF;
+    --sidebar-primary: #FFFFFF;
+    --sidebar-primary-foreground: #6C6BFF;
+    --sidebar-accent: #FFFFFF;
+    --sidebar-accent-foreground: #6C6BFF;
+    --sidebar-border: rgba(255, 255, 255, 0.1);
+    --sidebar-ring: #FFFFFF;
+    --font-sans: Geist;
+    --font-serif: Lora;
+    --font-mono: Geist Mono;
+    --shadow-color: #000000;
+    --shadow-opacity: 0.05;
+    --shadow-blur: 4px;
+    --shadow-spread: 0px;
+    --shadow-offset-x: 0px;
+    --shadow-offset-y: 2px;
+    --letter-spacing: 0rem;
+    --spacing: 0.25rem;
+    --shadow-2xs: 0px 2px 4px 0px hsl(0 0% 0% / 0.03);
+    --shadow-xs: 0px 2px 4px 0px hsl(0 0% 0% / 0.03);
+    --shadow-sm: 0px 2px 4px 0px hsl(0 0% 0% / 0.05), 0px 1px 2px -1px hsl(0 0% 0% / 0.05);
+    --shadow: 0px 2px 4px 0px hsl(0 0% 0% / 0.05), 0px 1px 2px -1px hsl(0 0% 0% / 0.05);
+    --shadow-md: 0px 2px 4px 0px hsl(0 0% 0% / 0.05), 0px 2px 4px -1px hsl(0 0% 0% / 0.05);
+    --shadow-lg: 0px 2px 4px 0px hsl(0 0% 0% / 0.05), 0px 4px 6px -1px hsl(0 0% 0% / 0.05);
+    --shadow-xl: 0px 2px 4px 0px hsl(0 0% 0% / 0.05), 0px 8px 10px -1px hsl(0 0% 0% / 0.05);
+    --shadow-2xl: 0px 2px 4px 0px hsl(0 0% 0% / 0.13);
+    --tracking-normal: 0rem;
+  }
+
+  .dark {
+    --background: oklch(0.2103 0.0059 285.8852);
+    --foreground: oklch(1.0000 0 0);
+    --card: oklch(0.2103 0.0059 285.8852);
+    --card-foreground: oklch(1.0000 0 0);
+    --popover: oklch(0.2103 0.0059 285.8852);
+    --popover-foreground: oklch(1.0000 0 0);
+    --primary: oklch(0.6105 0.2141 278.2722);
+    --primary-foreground: oklch(1.0000 0 0);
+    --secondary: oklch(0.7952 0.1217 299.8663);
+    --secondary-foreground: oklch(0.1408 0.0044 285.8229);
+    --muted: oklch(0.2739 0.0055 286.0326);
+    --muted-foreground: oklch(0.7118 0.0129 286.0665);
+    --accent: oklch(0.7952 0.1217 299.8663);
+    --accent-foreground: oklch(0.1408 0.0044 285.8229);
+    --destructive: oklch(0.3958 0.1331 25.7230);
+    --destructive-foreground: oklch(1.0000 0 0);
+    --border: oklch(0.2739 0.0055 286.0326);
+    --input: oklch(0.2739 0.0055 286.0326);
+    --ring: oklch(0.6105 0.2141 278.2722);
+    --chart-1: oklch(0.6105 0.2141 278.2722);
+    --chart-2: oklch(0.7952 0.1217 299.8663);
+    --chart-3: oklch(0.8702 0.0902 63.4780);
+    --chart-4: oklch(0.7118 0.0129 286.0665);
+    --chart-5: oklch(0.4419 0.0146 285.7864);
+    --radius: 0.5rem;
+    --sidebar: oklch(0.2103 0.0059 285.8852);
+    --sidebar-foreground: oklch(0.7118 0.0129 286.0665);
+    --sidebar-primary: oklch(0.6105 0.2141 278.2722);
+    --sidebar-primary-foreground: oklch(1.0000 0 0);
+    --sidebar-accent: oklch(0.7952 0.1217 299.8663);
+    --sidebar-accent-foreground: oklch(0.1408 0.0044 285.8229);
+    --sidebar-border: oklch(0.2739 0.0055 286.0326);
+    --sidebar-ring: oklch(0.6105 0.2141 278.2722);
+    --font-sans: Geist;
+    --font-serif: Lora;
+    --font-mono: Geist Mono;
+    --shadow-color: #000000;
+    --shadow-opacity: 0.1;
+    --shadow-blur: 4px;
+    --shadow-spread: 0px;
+    --shadow-offset-x: 0px;
+    --shadow-offset-y: 2px;
+    --letter-spacing: 0rem;
+    --spacing: 0.25rem;
+    --shadow-2xs: 0px 2px 4px 0px hsl(0 0% 0% / 0.05);
+    --shadow-xs: 0px 2px 4px 0px hsl(0 0% 0% / 0.05);
+    --shadow-sm: 0px 2px 4px 0px hsl(0 0% 0% / 0.10), 0px 1px 2px -1px hsl(0 0% 0% / 0.10);
+    --shadow: 0px 2px 4px 0px hsl(0 0% 0% / 0.10), 0px 1px 2px -1px hsl(0 0% 0% / 0.10);
+    --shadow-md: 0px 2px 4px 0px hsl(0 0% 0% / 0.10), 0px 2px 4px -1px hsl(0 0% 0% / 0.10);
+    --shadow-lg: 0px 2px 4px 0px hsl(0 0% 0% / 0.10), 0px 4px 6px -1px hsl(0 0% 0% / 0.10);
+    --shadow-xl: 0px 2px 4px 0px hsl(0 0% 0% / 0.10), 0px 8px 10px -1px hsl(0 0% 0% / 0.10);
+    --shadow-2xl: 0px 2px 4px 0px hsl(0 0% 0% / 0.25);
+  }
+  .theme {
+    --font-sans: Geist;
+    --font-mono: Geist Mono;
+    --font-serif: Lora;
+    --radius: 0.5rem;
+    --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
+    --tracking-tight: calc(var(--tracking-normal) - 0.025em);
+    --tracking-wide: calc(var(--tracking-normal) + 0.025em);
+    --tracking-wider: calc(var(--tracking-normal) + 0.05em);
+    --tracking-widest: calc(var(--tracking-normal) + 0.1em);
+  }
+  body {
+    letter-spacing: var(--tracking-normal);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  /* PodPay Sidebar */
+  .podpay-sidebar {
+    background: linear-gradient(180deg, #6C6BFF 0%, #5A4FCF 100%);
+    width: 260px;
+    min-height: 100vh;
+  }
+  
+  .podpay-sidebar-nav-item {
+    @apply flex items-center px-6 py-3 text-white hover:text-white transition-all duration-200;
+    opacity: 0.8;
+  }
+  
+  .podpay-sidebar-nav-item:hover {
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  .podpay-sidebar-nav-item.active {
+    @apply text-white border-r-2 border-white;
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  /* PodPay Cards */
+  .podpay-card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-100 p-6;
+  }
+  
+  /* PodPay Stats Cards */
+  .podpay-stat-card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow duration-200;
+  }
+  
+  /* PodPay Buttons */
+  .podpay-btn-primary {
+    @apply bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-colors duration-200;
+  }
+  
+  .podpay-btn-secondary {
+    @apply bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg font-medium hover:bg-gray-50 transition-colors duration-200;
+  }
+  
+  /* PodPay Tables */
+  .podpay-table {
+    @apply w-full border-collapse bg-white rounded-lg shadow-sm overflow-hidden;
+  }
+  
+  .podpay-table th {
+    @apply bg-gray-50 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200;
+  }
+  
+  .podpay-table td {
+    @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900 border-b border-gray-100;
+  }
+  
+  .podpay-table tr:hover {
+    @apply bg-gray-50;
+  }
+  
+  /* PodPay Chart Container */
+  .podpay-chart-container {
+    @apply bg-white rounded-lg shadow-sm border border-gray-100 p-6;
+  }
+}

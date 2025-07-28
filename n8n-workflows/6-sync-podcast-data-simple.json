@@ -1,0 +1,210 @@
+{
+  "name": "6. Sync Podcast Data (Simple)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sync-podcast-data",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-start",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-1",
+              "leftValue": "={{ $json.userId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-user-id",
+      "name": "Check User ID",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://cms.megaphone.fm/api/networks/1077e5f2-0247-11f0-a50a-770c9b0b9b7b/podcasts",
+        "authentication": "genericCredentials",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-megaphone-podcasts",
+      "name": "Fetch Megaphone Podcasts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [680, 280],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "megaphone-api-auth",
+          "name": "Megaphone API Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "object": [
+            {
+              "name": "podcast",
+              "value": "={{ $json.length > 0 ? {\n  title: $json[0].title || 'Unknown Podcast',\n  subtitle: $json[0].subtitle || 'Podcast synced from Megaphone',\n  summary: $json[0].summary || $json[0].description || 'Podcast data synced from Megaphone API',\n  episodes_count: $json[0].episodes_count || 0,\n  status: $json[0].status || 'active',\n  image_url: $json[0].artwork_url,\n  feed_url: $json[0].feed_url,\n  updated_at: new Date().toISOString(),\n  megaphone_id: $json[0].id,\n  last_sync: new Date().toISOString()\n} : null }}"
+            }
+          ],
+          "boolean": [
+            {
+              "name": "success",
+              "value": true
+            }
+          ],
+          "string": [
+            {
+              "name": "message",
+              "value": "={{ $json.length > 0 ? 'Podcast data synced from Megaphone successfully' : 'No podcasts found' }}"
+            }
+          ]
+        }
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [900, 280]
+    },
+    {
+      "parameters": {
+        "values": {
+          "boolean": [
+            {
+              "name": "success",
+              "value": false
+            }
+          ],
+          "string": [
+            {
+              "name": "error",
+              "value": "User ID is required"
+            },
+            {
+              "name": "message",
+              "value": "Missing user ID parameter"
+            }
+          ]
+        }
+      },
+      "id": "format-error",
+      "name": "Format Error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [680, 360]
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 320]
+    }
+  ],
+  "connections": {
+    "webhook-start": {
+      "main": [
+        [
+          {
+            "node": "check-user-id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check-user-id": {
+      "main": [
+        [
+          {
+            "node": "fetch-megaphone-podcasts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "format-error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "fetch-megaphone-podcasts": {
+      "main": [
+        [
+          {
+            "node": "format-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "format-response": {
+      "main": [
+        [
+          {
+            "node": "webhook-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "format-error": {
+      "main": [
+        [
+          {
+            "node": "webhook-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-07-25T13:55:00.000Z",
+  "versionId": "4"
+}

@@ -1,0 +1,72 @@
+# Docker Compose for Custom Conversion API
+version: '3.8'
+
+services:
+  # Main API service
+  conversion-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - AWS_BUCKET=${AWS_BUCKET}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - MAX_CONCURRENT_JOBS=10
+    depends_on:
+      - redis
+    volumes:
+      - /tmp/conversions:/tmp/conversions
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+
+  # Background worker service
+  worker:
+    build: .
+    command: python -c "import asyncio; from custom_conversion_api import worker; asyncio.run(worker())"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - AWS_BUCKET=${AWS_BUCKET}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - MAX_CONCURRENT_JOBS=10
+    depends_on:
+      - redis
+    volumes:
+      - /tmp/conversions:/tmp/conversions
+    restart: unless-stopped
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+
+  # Redis for job queue
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+  # Optional: Redis monitoring
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+
+volumes:
+  redis_data:

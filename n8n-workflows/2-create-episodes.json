@@ -1,0 +1,359 @@
+{
+  "name": "Create Episodes - Final",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "create-episodes",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-episodes",
+      "name": "Episodes Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and prepare video IDs for processing\nconst inputData = $input.first().json;\nconsole.log('Webhook received:', JSON.stringify(inputData, null, 2));\n\nconst videoIds = inputData.videoIds || [];\nconst podcastId = inputData.podcastId;\nconst userId = inputData.userId;\n\nconsole.log('Processing:', { podcastId, videoCount: videoIds.length, userId });\n\nif (!videoIds || videoIds.length === 0) {\n  console.error('No video IDs found in input data');\n  return [{ json: { errorMessage: 'No video IDs provided', inputData } }];\n}\n\n// Return an array where each item represents one video to process\nreturn videoIds.map(videoId => ({\n  json: {\n    videoId,\n    podcastId,\n    userId,\n    timestamp: new Date().toISOString()\n  }\n}));"
+      },
+      "id": "prepare-video-data",
+      "name": "Prepare Video Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-videos",
+      "name": "Split Video IDs",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "videoId",
+              "value": "={{ $json.json.videoId }}"
+            },
+            {
+              "name": "podcastId",
+              "value": "={{ $json.json.podcastId }}"
+            },
+            {
+              "name": "userId",
+              "value": "={{ $json.json.userId }}"
+            },
+            {
+              "name": "title",
+              "value": "Episode from Video {{ $json.json.videoId }}"
+            },
+            {
+              "name": "summary",
+              "value": "Episode created from YouTube video {{ $json.json.videoId }}"
+            },
+            {
+              "name": "audioUrl",
+              "value": "https://youtube.com/watch?v={{ $json.json.videoId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prepare-episode-data",
+      "name": "Prepare Episode Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://cms.megaphone.fm/api/networks/1077e5f2-0247-11f0-a50a-770c9b0b9b7b/podcasts/{{ $json.podcastId }}/episodes",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Token token=\"359a75d62bfb7e0c5214ac2404d04bc4\""
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "title",
+              "value": "={{ $json.title }}"
+            },
+            {
+              "name": "summary",
+              "value": "={{ $json.summary }}"
+            },
+            {
+              "name": "pubDate",
+              "value": "={{ new Date().toISOString() }}"
+            },
+            {
+              "name": "audioUrl",
+              "value": "={{ $json.audioUrl }}"
+            },
+            {
+              "name": "draft",
+              "value": "false"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "create-megaphone-episode",
+      "name": "Create Megaphone Episode",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": {
+          "__rl": true,
+          "value": "episodes",
+          "mode": "list"
+        },
+        "records": {
+          "values": [
+            {
+              "column": "user_id",
+              "value": "={{ $('Prepare Episode Data').first().json.userId }}"
+            },
+            {
+              "column": "podcast_id",
+              "value": "={{ $('Prepare Episode Data').first().json.podcastId }}"
+            },
+            {
+              "column": "youtube_video_id",
+              "value": "={{ $('Prepare Episode Data').first().json.videoId }}"
+            },
+            {
+              "column": "megaphone_episode_id",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "column": "title",
+              "value": "={{ $('Prepare Episode Data').first().json.title }}"
+            },
+            {
+              "column": "summary",
+              "value": "={{ $('Prepare Episode Data').first().json.summary }}"
+            },
+            {
+              "column": "audio_url",
+              "value": "={{ $('Prepare Episode Data').first().json.audioUrl }}"
+            },
+            {
+              "column": "status",
+              "value": "={{ $json.id ? 'published' : 'failed' }}"
+            },
+            {
+              "column": "published_at",
+              "value": "={{ new Date().toISOString() }}"
+            },
+            {
+              "column": "created_at",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "save-to-supabase",
+      "name": "Save Episode to Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "videoId",
+              "value": "={{ $('Prepare Episode Data').first().json.videoId }}"
+            },
+            {
+              "name": "episodeId",
+              "value": "={{ $('Create Megaphone Episode').first().json.id || 'failed' }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $('Create Megaphone Episode').first().json.id ? 'created' : 'failed' }}"
+            },
+            {
+              "name": "title",
+              "value": "={{ $('Prepare Episode Data').first().json.title }}"
+            },
+            {
+              "name": "supabaseId",
+              "value": "={{ $json.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "format-episode-result",
+      "name": "Format Episode Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "results",
+        "include": "selectedFields",
+        "fieldsToInclude": {
+          "fields": [
+            {
+              "fieldName": "videoId"
+            },
+            {
+              "fieldName": "episodeId"
+            },
+            {
+              "fieldName": "status"
+            },
+            {
+              "fieldName": "title"
+            },
+            {
+              "fieldName": "supabaseId"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aggregate-results",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: true,\n  results: $json.results,\n  summary: {\n    total: $json.results.length,\n    successful: $json.results.filter(r => r.status === 'created').length,\n    failed: $json.results.filter(r => r.status === 'failed').length\n  },\n  episodesSaved: $json.results.filter(r => r.status === 'created')\n} }}"
+      },
+      "id": "episodes-response",
+      "name": "Episodes Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2000, 300]
+    }
+  ],
+  "connections": {
+    "Episodes Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Video Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Video Data": {
+      "main": [
+        [
+          {
+            "node": "Split Video IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Video IDs": {
+      "main": [
+        [
+          {
+            "node": "Prepare Episode Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Episode Data": {
+      "main": [
+        [
+          {
+            "node": "Create Megaphone Episode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Megaphone Episode": {
+      "main": [
+        [
+          {
+            "node": "Save Episode to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Episode to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Format Episode Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Episode Result": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "Episodes Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

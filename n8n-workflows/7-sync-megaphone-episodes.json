@@ -1,0 +1,368 @@
+{
+  "name": "7. Sync Megaphone Episodes",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sync-megaphone-episodes",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-start",
+      "name": "Sync Episodes Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "sync-megaphone-episodes"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "podcastId",
+              "value": "={{ $json.podcastId }}"
+            },
+            {
+              "name": "userId",
+              "value": "={{ $json.userId }}"
+            }
+          ]
+        }
+      },
+      "id": "extract-params",
+      "name": "Extract Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-1",
+              "leftValue": "={{ $json.podcastId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "id": "condition-2",
+              "leftValue": "={{ $json.userId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "validate-params",
+      "name": "Validate Parameters",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://cms.megaphone.fm/api/networks/1077e5f2-0247-11f0-a50a-770c9b0b9b7b/podcasts/' + $json.podcastId + '/episodes' }}",
+        "authentication": "genericCredentials",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "qs": {
+            "qs": [
+              {
+                "name": "limit",
+                "value": "50"
+              },
+              {
+                "name": "offset",
+                "value": "0"
+              }
+            ]
+          }
+        }
+      },
+      "id": "fetch-megaphone-episodes",
+      "name": "Fetch Megaphone Episodes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [900, 280],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "megaphone-api-auth",
+          "name": "Megaphone API Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-1",
+              "leftValue": "={{ $json.episodes }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "check-episodes-exist",
+      "name": "Check Episodes Exist",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 280]
+    },
+    {
+      "parameters": {
+        "values": {
+          "array": [
+            {
+              "name": "episodes",
+              "value": "={{ $json.episodes.map(ep => ({\n  id: ep.id,\n  title: ep.title,\n  summary: ep.summary,\n  publishedAt: ep.publishedAt,\n  duration: ep.duration,\n  status: ep.status,\n  playCount: ep.playCount || 0,\n  downloadCount: ep.downloadCount || 0,\n  fileUrl: ep.fileUrl,\n  megaphone_id: ep.id,\n  podcast_id: $('extract-params').item.json.podcastId,\n  user_id: $('extract-params').item.json.userId,\n  created_at: new Date().toISOString()\n})) }}"
+            }
+          ],
+          "number": [
+            {
+              "name": "episodeCount",
+              "value": "={{ $json.episodes.length }}"
+            }
+          ],
+          "boolean": [
+            {
+              "name": "success",
+              "value": true
+            }
+          ],
+          "string": [
+            {
+              "name": "message",
+              "value": "={{ `${$json.episodes.length} episodes synced from Megaphone successfully` }}"
+            }
+          ]
+        }
+      },
+      "id": "format-episodes-response",
+      "name": "Format Episodes Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1340, 260]
+    },
+    {
+      "parameters": {
+        "values": {
+          "array": [
+            {
+              "name": "episodes",
+              "value": "=[]"
+            }
+          ],
+          "number": [
+            {
+              "name": "episodeCount",
+              "value": 0
+            }
+          ],
+          "boolean": [
+            {
+              "name": "success",
+              "value": true
+            }
+          ],
+          "string": [
+            {
+              "name": "message",
+              "value": "No episodes found in Megaphone for this podcast"
+            }
+          ]
+        }
+      },
+      "id": "format-no-episodes-response",
+      "name": "Format No Episodes Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "array": [
+            {
+              "name": "episodes",
+              "value": "=[]"
+            }
+          ],
+          "boolean": [
+            {
+              "name": "success",
+              "value": false
+            }
+          ],
+          "string": [
+            {
+              "name": "error",
+              "value": "Missing required parameters: podcastId and userId are required"
+            },
+            {
+              "name": "message",
+              "value": "Invalid request parameters"
+            }
+          ]
+        }
+      },
+      "id": "format-error-response",
+      "name": "Format Error Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [900, 340]
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "id": "webhook-response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1560, 300]
+    }
+  ],
+  "connections": {
+    "webhook-start": {
+      "main": [
+        [
+          {
+            "node": "extract-params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract-params": {
+      "main": [
+        [
+          {
+            "node": "validate-params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "validate-params": {
+      "main": [
+        [
+          {
+            "node": "fetch-megaphone-episodes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "format-error-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "fetch-megaphone-episodes": {
+      "main": [
+        [
+          {
+            "node": "check-episodes-exist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check-episodes-exist": {
+      "main": [
+        [
+          {
+            "node": "format-episodes-response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "format-no-episodes-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "format-episodes-response": {
+      "main": [
+        [
+          {
+            "node": "webhook-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "format-no-episodes-response": {
+      "main": [
+        [
+          {
+            "node": "webhook-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "format-error-response": {
+      "main": [
+        [
+          {
+            "node": "webhook-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-07-25T13:30:00.000Z",
+  "versionId": "1"
+}

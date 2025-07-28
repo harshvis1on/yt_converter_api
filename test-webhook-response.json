@@ -1,0 +1,39 @@
+{
+  "success": true,
+  "channel": {
+    "id": "UCrRq8LFB8ebxZIxOp1M3DZQ",
+    "title": "Harsh ☀️",
+    "description": "Your channel description",
+    "subscriberCount": "1000",
+    "videoCount": "16"
+  },
+  "videos": [
+    {
+      "videoId": "fJ9zZ98txA0",
+      "title": "Notion Doubling 100 YouTuber's Income $$   4 April 2024",
+      "description": "This is a test video for an internal tool",
+      "publishedAt": "2025-04-16T13:07:29Z",
+      "thumbnail": "https://i.ytimg.com/vi/fJ9zZ98txA0/maxresdefault.jpg",
+      "position": 0
+    },
+    {
+      "videoId": "EcxzZVAuuJg",
+      "title": "Screen Recording 2025 04 13 at 3 46 29 PM", 
+      "description": "",
+      "publishedAt": "2025-04-13T10:19:45Z",
+      "thumbnail": "https://i.ytimg.com/vi/EcxzZVAuuJg/maxresdefault.jpg",
+      "position": 1
+    }
+  ],
+  "message": "YouTube channel data fetched successfully - ready for podcast creation form",
+  "prefillData": {
+    "title": "Harsh ☀️ Podcast",
+    "description": "Podcast created from Harsh ☀️ YouTube channel with 16 videos.",
+    "author": "Harsh ☀️",
+    "link": "https://www.youtube.com/channel/UCrRq8LFB8ebxZIxOp1M3DZQ",
+    "language": "en",
+    "primaryCategory": "Technology",
+    "explicit": "clean",
+    "podcastType": "serial"
+  }
+}

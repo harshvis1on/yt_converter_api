@@ -1,0 +1,42 @@
+{
+  "name": "4. Health Check",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "health",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-health",
+      "name": "Health Check Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: true,\n  status: 'healthy',\n  timestamp: new Date().toISOString(),\n  message: 'PodPay n8n workflows are operational'\n} }}"
+      },
+      "id": "health-response",
+      "name": "Health Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "Health Check Webhook": {
+      "main": [
+        [
+          {
+            "node": "Health Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
