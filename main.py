@@ -125,12 +125,21 @@ def list_user_videos(request: Request):
 
 # 🚀 RapidAPI YouTube Conversion - Routes to correct API based on distribution type
 @app.post("/api/rapidapi/convert")
-def rapidapi_convert(  # Changed from async to sync
+def rapidapi_convert(
     video_id: str,
     content_type: str,  # "audio" or "video" - from user's distribution preference
     title: str = "",
-    quality: str = "1080p"  # Maximum video quality available
+    quality: str = "1080p",  # Maximum video quality available
+    api_key: str = Query(..., description="API key for authentication")
 ):
+    # Authenticate the request
+    expected_api_key = os.getenv("CONVERSION_API_KEY", "your-secret-conversion-key")
+    if api_key != expected_api_key:
+        raise HTTPException(
+            status_code=401, 
+            detail="Invalid API key. Access denied to conversion service."
+        )
+    
     rapidapi_key = os.getenv("RAPIDAPI_KEY", "YOUR_RAPIDAPI_KEY")
     
     try:
