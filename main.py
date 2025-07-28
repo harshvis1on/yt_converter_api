@@ -82,35 +82,35 @@ def list_user_videos(request: Request):
                 error_detail = res2.text
                 user_error = api_error_handler.get_user_friendly_error(res2.status_code, error_detail)
                 raise HTTPException(status_code=res2.status_code, detail=user_error)
+            
+            videos_data = res2.json()
+            
+            # Return structured response with channel info
+            return {
+                "channel": {
+                    "id": channel_info["id"],
+                    "title": channel_info["snippet"]["title"],
+                    "description": channel_info["snippet"]["description"],
+                    "publishedAt": channel_info["snippet"]["publishedAt"]
+                },
+                "videos": [{
+                    "videoId": item["snippet"]["resourceId"]["videoId"],
+                    "title": item["snippet"]["title"],
+                    "description": item["snippet"]["description"],
+                    "publishedAt": item["snippet"]["publishedAt"],
+                    "thumbnail": item["snippet"]["thumbnails"]["high"]["url"] if "high" in item["snippet"]["thumbnails"] else item["snippet"]["thumbnails"]["default"]["url"]
+                } for item in videos_data.get("items", [])],
+                "totalResults": videos_data.get("pageInfo", {}).get("totalResults", 0),
+                "nextPageToken": videos_data.get("nextPageToken")
+            }
                 
-                videos_data = res2.json()
-                
-                # Return structured response with channel info
-                return {
-                    "channel": {
-                        "id": channel_info["id"],
-                        "title": channel_info["snippet"]["title"],
-                        "description": channel_info["snippet"]["description"],
-                        "publishedAt": channel_info["snippet"]["publishedAt"]
-                    },
-                    "videos": [{
-                        "videoId": item["snippet"]["resourceId"]["videoId"],
-                        "title": item["snippet"]["title"],
-                        "description": item["snippet"]["description"],
-                        "publishedAt": item["snippet"]["publishedAt"],
-                        "thumbnail": item["snippet"]["thumbnails"]["high"]["url"] if "high" in item["snippet"]["thumbnails"] else item["snippet"]["thumbnails"]["default"]["url"]
-                    } for item in videos_data.get("items", [])],
-                    "totalResults": videos_data.get("pageInfo", {}).get("totalResults", 0),
-                    "nextPageToken": videos_data.get("nextPageToken")
-                }
-                
-            except HTTPException:
-                raise
-            except Exception as e:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to fetch YouTube data: {str(e)}"
-                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to fetch YouTube data: {str(e)}"
+            )
                 
     except HTTPException:
         raise
