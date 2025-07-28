@@ -159,6 +159,13 @@ def rapidapi_convert(request: ConversionRequest):
     print(f"[DEBUG] Converting video_id: {request.video_id}, content_type: {request.content_type}")
     print(f"[DEBUG] RapidAPI key present: {'Yes' if rapidapi_key != 'YOUR_RAPIDAPI_KEY' else 'No'}")
     
+    # Check if RapidAPI key is configured
+    if rapidapi_key == "YOUR_RAPIDAPI_KEY":
+        raise HTTPException(
+            status_code=500,
+            detail="RapidAPI key not configured. Please set RAPIDAPI_KEY environment variable."
+        )
+    
     try:
         if request.content_type.lower() == "audio":
             # Use YouTube MP3 Audio Video downloader for audio
@@ -217,8 +224,20 @@ def rapidapi_convert(request: ConversionRequest):
             api_provider = "YouTube Video FAST Downloader 24/7"
         
         # Handle response from either API
+        print(f"[DEBUG] API response status: {download_response.status_code}")
+        print(f"[DEBUG] API response headers: {dict(download_response.headers)}")
+        
         if download_response.status_code == 200:
-            data = download_response.json()
+            try:
+                data = download_response.json()
+                print(f"[DEBUG] API response data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+            except Exception as json_error:
+                print(f"[ERROR] Failed to parse JSON response: {json_error}")
+                print(f"[ERROR] Raw response: {download_response.text[:500]}")
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Invalid JSON response from {api_provider}: {json_error}"
+                )
             
             # Try to get additional video info (works for video API)
             video_info = {}
@@ -286,10 +305,13 @@ def rapidapi_convert(request: ConversionRequest):
             detail=f"External API request failed: {str(e)}"
         )
     except Exception as e:
-        print(f"[ERROR] Unexpected error for video_id: {request.video_id}, error: {str(e)}")
+        error_msg = str(e) if str(e) else f"Unknown error: {type(e).__name__}"
+        print(f"[ERROR] Unexpected error for video_id: {request.video_id}, error: {error_msg}")
+        print(f"[ERROR] Exception type: {type(e)}")
+        print(f"[ERROR] Exception args: {e.args}")
         raise HTTPException(
             status_code=500,
-            detail=f"Conversion service error: {str(e)}"
+            detail=f"Conversion service error: {error_msg}"
         )
 
 # 📥 Serve previously downloaded file
