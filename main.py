@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -223,7 +224,7 @@ async def rapidapi_convert(
                     "quality": data.get("quality", quality),
                     "format": data.get("format") or ("mp3" if content_type.lower() == "audio" else "mp4"),
                     "thumbnail": video_info.get("thumbnail") or data.get("thumbnail"),
-                    "processedAt": httpx._utils.utcnow().isoformat(),
+                    "processedAt": datetime.utcnow().isoformat(),
                     "apiProvider": api_provider,
                     "distributionType": content_type
                 }
