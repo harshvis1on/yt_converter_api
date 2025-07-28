@@ -240,6 +240,7 @@ def rapidapi_convert(request: ConversionRequest):
             try:
                 data = download_response.json()
                 print(f"[DEBUG] API response data keys: {list(data.keys()) if isinstance(data, dict) else 'Not a dict'}")
+                print(f"[DEBUG] Full API response data: {data}")
             except Exception as json_error:
                 print(f"[ERROR] Failed to parse JSON response: {json_error}")
                 print(f"[ERROR] Raw response: {download_response.text[:500]}")
@@ -256,7 +257,7 @@ def rapidapi_convert(request: ConversionRequest):
                 "success": True,
                 "videoId": request.video_id,
                 "contentType": request.content_type,
-                "downloadUrl": data.get("download_url") or data.get("url") or data.get("link"),
+                "downloadUrl": data.get("download_url") or data.get("url") or data.get("link") or data.get("downloadUrl") or data.get("download_link") or data.get("audio_url") or data.get("video_url") or data.get("file_url"),
                 "title": video_info.get("title") or data.get("title", request.title),
                 "duration": video_info.get("duration") or data.get("duration"),
                 "fileSize": data.get("file_size") or data.get("size"),
