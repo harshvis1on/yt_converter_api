@@ -29,6 +29,16 @@ YOUTUBE_API_URL = "https://www.googleapis.com/youtube/v3"
 token_manager = TokenManager()
 api_error_handler = APIErrorHandler()
 
+# Health check endpoint
+@app.get("/health")
+def health_check():
+    return {
+        "status": "healthy",
+        "service": "YouTube Conversion API",
+        "rapidapi_configured": os.getenv("RAPIDAPI_KEY", "YOUR_RAPIDAPI_KEY") != "YOUR_RAPIDAPI_KEY",
+        "conversion_auth_configured": os.getenv("CONVERSION_API_KEY", "your-secret-conversion-key") != "your-secret-conversion-key"
+    }
+
 # 📺 List user's uploaded videos
 @app.get("/list_user_videos")
 def list_user_videos(request: Request):
@@ -142,12 +152,17 @@ def rapidapi_convert(
     
     rapidapi_key = os.getenv("RAPIDAPI_KEY", "YOUR_RAPIDAPI_KEY")
     
+    # Debug logging
+    print(f"[DEBUG] Converting video_id: {video_id}, content_type: {content_type}")
+    print(f"[DEBUG] RapidAPI key present: {'Yes' if rapidapi_key != 'YOUR_RAPIDAPI_KEY' else 'No'}")
+    
     try:
         if content_type.lower() == "audio":
             # Use YouTube MP3 Audio Video downloader for audio
             audio_host = "youtube-mp3-audio-video-downloader.p.rapidapi.com"
             
             # Call audio conversion API (YouTube MP3 Audio Video downloader)
+            print(f"[DEBUG] Calling audio API: {audio_host}")
             download_response = requests.get(
                 f"https://{audio_host}/download",
                 params={
@@ -161,6 +176,7 @@ def rapidapi_convert(
                 },
                 timeout=60
             )
+            print(f"[DEBUG] Audio API response status: {download_response.status_code}")
             
             api_provider = "YouTube MP3 Audio Video downloader"
             
@@ -255,11 +271,19 @@ def rapidapi_convert(
             )
             
     except requests.exceptions.Timeout:
+        print(f"[ERROR] Timeout error for video_id: {video_id}")
         raise HTTPException(
             status_code=504,
             detail="Conversion request timed out. Please try again."
         )
+    except requests.exceptions.RequestException as e:
+        print(f"[ERROR] Request error for video_id: {video_id}, error: {str(e)}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"External API request failed: {str(e)}"
+        )
     except Exception as e:
+        print(f"[ERROR] Unexpected error for video_id: {video_id}, error: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Conversion service error: {str(e)}"
