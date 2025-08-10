@@ -14,11 +14,11 @@ This is a YouTube-to-Podcast conversion platform with both React frontend and Fa
 ## Architecture
 
 **Frontend (React)**: React 18 app with TypeScript support, using Tailwind CSS and React Router
-**Backend (Python)**: FastAPI server with YouTube Data API integration and yt-dlp for video conversion
+**Backend (Python)**: FastAPI server with YouTube Data API integration and RapidAPI for video conversion
 **Database**: Supabase for user data, podcasts, episodes, and payout details
 **Storage**: Supabase Storage for podcast artwork and media files
 **Authentication**: Google OAuth 2.0 for YouTube access
-**External APIs**: Megaphone for podcast hosting, n8n for workflow automation
+**External APIs**: Megaphone for podcast hosting, n8n for workflow automation, RapidAPI for video conversion
 
 ## Development Commands
 
@@ -32,9 +32,15 @@ npm run build
 
 # Run tests
 npm test
+
+# Install dependencies 
+npm install
+
+# TypeScript compilation check
+npx tsc --noEmit
 ```
 
-### Backend Development
+### Backend Development  
 ```bash
 # Start FastAPI server (from project root)
 python main.py
@@ -43,37 +49,47 @@ uvicorn main:app --reload
 
 # Install Python dependencies
 pip install -r requirements.txt
+
+# Start with debug logging
+python -u main.py
+
+# Health check backend
+curl http://localhost:8000/health
 ```
 
-### Testing Commands
+### Full Development Setup
 ```bash
-# Clear browser state for fresh user testing
-# Run in browser console:
-localStorage.clear(); sessionStorage.clear(); location.reload();
+# Terminal 1: Start backend
+python main.py
 
-# Start development server with specific port
-PORT=3001 npm start
+# Terminal 2: Start frontend  
+npm start
 
-# Check TypeScript compilation
-npm run build
+# The app will be available at http://localhost:3001
+# Backend API at http://localhost:8000
 ```
 
 ## Key Components & Architecture
 
 ### Backend Structure (`main.py`)
-- **FastAPI app** with CORS middleware for cross-origin requests
-- **Authentication**: TokenManager class for Google OAuth token validation and refresh
+- **FastAPI app** with CORS middleware for cross-origin requests  
+- **Authentication**: TokenManager class (`lib/auth.py`) for Google OAuth token validation and refresh
 - **API Error Handling**: APIErrorHandler with retry logic and user-friendly error messages
-- **Video Conversion**: Uses yt-dlp for YouTube video download and conversion to MP4
+- **Video Conversion**: Uses RapidAPI services for YouTube video/audio conversion (replaced yt-dlp)
+- **Key Endpoints**:
+  - `GET /list_user_videos` - Fetch user's YouTube videos with auth validation
+  - `POST /api/rapidapi/convert` - Convert YouTube videos using RapidAPI services
+  - `GET /health` - Service health check and configuration status
 
 ### Frontend Structure (`src/`)
 - **Components**: Modular React components for UI (Header, Sidebar, Dashboard, etc.)
 - **Services**: 
-  - `supabase.js` - Database operations and file uploads
-  - `n8nApi.js` - Workflow automation API calls
+  - `supabase.js` - Database operations and file uploads (SupabaseService class)
+  - `n8nApi.js` - Workflow automation API calls (N8nApiService class with fallback mocks)
   - `episodeService.js` - Episode management
 - **Hooks**: Custom hooks for data fetching (`useEpisodes.js`, `usePodcastData.ts`, `useYouTubeSync.js`)
-- **Types**: TypeScript definitions in `src/types/`
+- **Types**: TypeScript definitions in `src/types/` (podcast.ts, user.ts)
+- **Utils**: Helper functions (`localStorage.js`, `onboarding.js`)
 
 ### Authentication Flow
 1. User clicks "Connect YouTube" → Google OAuth flow
@@ -82,9 +98,10 @@ npm run build
 4. Subsequent API calls include `Authorization: Bearer {token}` header
 
 ### Data Sync Architecture
-- **n8n workflows** handle complex operations (podcast creation, episode sync)
-- **Supabase** stores persistent data (users, podcasts, episodes, payouts)
-- **localStorage** maintains client state between sessions
+- **n8n workflows** handle complex operations (podcast creation, episode sync) with production/test webhook routing
+- **Supabase** stores persistent data (users, podcasts, episodes, payouts) with SupabaseService class
+- **localStorage** maintains client state between sessions (tokens, user data, current podcast)
+- **Mock fallbacks** for n8n workflows when endpoints are unavailable (dev/offline support)
 
 ## Important Configuration
 
@@ -96,10 +113,14 @@ REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
 REACT_APP_MEGAPHONE_API_TOKEN=your_megaphone_token
 REACT_APP_MEGAPHONE_NETWORK_ID=your_network_id
 REACT_APP_N8N_BASE_URL=your_n8n_url
+REACT_APP_USE_TEST_WEBHOOKS=false          # Set to true for test webhooks
+REACT_APP_DEV_MODE=false                   # Set to true for mock responses
 
 # Python Backend (environment or .env)
 GOOGLE_CLIENT_ID=your_google_oauth_client_id
 GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
+RAPIDAPI_KEY=your_rapidapi_key             # For video conversion services
+CONVERSION_API_KEY=your_secret_conversion_key  # Internal API authentication
 ```
 
 ### Google OAuth Configuration
@@ -109,13 +130,19 @@ GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
 ## Key API Endpoints
 
 ### Backend (`main.py`)
+- `GET /health` - Service health check and configuration status
 - `GET /list_user_videos` - Fetch user's YouTube videos with auth validation
-- `GET /convert?url={youtube_url}` - Convert YouTube video to MP4 download
-- `GET /download/{filename}` - Serve previously converted files
+- `POST /api/rapidapi/convert` - Convert YouTube videos using RapidAPI services (ConversionRequest model)
 
-### Frontend API Calls
-- **n8n Workflows**: `/webhook/user-setup`, `/webhook/youtube-sync`, `/webhook/create-podcast`
-- **Supabase Operations**: User podcasts, episode management, payout details
+### Frontend API Calls  
+- **n8n Workflows**: Production webhooks at `/webhook/{endpoint}` or test webhooks at `/webhook-test/{endpoint}`
+  - `youtube-sync` - Fetch YouTube channel data for form prefill
+  - `create-podcast` - Create podcast in Megaphone with all metadata
+  - `create-episodes` - Convert YouTube videos to podcast episodes
+  - `sync-podcast-data` - Sync podcast metadata from Megaphone
+  - `fetch-episodes` - Get published episodes from Megaphone
+  - `user-setup` - Store user data after OAuth
+- **Supabase Operations**: User podcasts, episode management, payout details via SupabaseService
 
 ## Development Notes
 
@@ -131,10 +158,13 @@ GOOGLE_CLIENT_SECRET=your_google_oauth_client_secret
 - Supabase for server-side data persistence
 
 ### Video Processing
-- Uses yt-dlp with specific format selection: `bv[ext=mp4][height<=2160]+ba[ext=m4a]/best[ext=mp4]`
-- Handles common YouTube errors (private videos, copyright restrictions, age restrictions)
-- 10-minute timeout for video conversion
-- Automatic cleanup of failed downloads
+- Uses RapidAPI services for video/audio conversion:
+  - **Audio**: `youtube-mp3-audio-video-downloader.p.rapidapi.com`
+  - **Video**: `youtube-video-fast-downloader-24-7.p.rapidapi.com`
+- Handles common errors (private videos, copyright restrictions, rate limits)
+- 60-second timeout for RapidAPI requests
+- Returns download URLs instead of storing files locally
+- Distribution type determines which API service to use (audio vs video)
 
 ## Testing Approach
 
@@ -152,6 +182,18 @@ console.log('Auth State:', {
   podcast: !!localStorage.getItem('currentPodcast')
 });
 
+// Check n8n API configuration
+console.log('n8n Config:', {
+  baseUrl: process.env.REACT_APP_N8N_BASE_URL,
+  useTestWebhooks: process.env.REACT_APP_USE_TEST_WEBHOOKS,
+  devMode: process.env.REACT_APP_DEV_MODE
+});
+
+// Test n8n connection
+fetch(`${process.env.REACT_APP_N8N_BASE_URL}/webhook/health`)
+  .then(r => console.log('n8n health:', r.status))
+  .catch(e => console.log('n8n error:', e));
+
 // Force data refresh
 if (window.usePodcastData?.refreshPodcasts) {
   window.usePodcastData.refreshPodcasts();
@@ -160,12 +202,14 @@ if (window.usePodcastData?.refreshPodcasts) {
 
 ## Common Patterns
 
-### Authentication Check
-```javascript
-const auth = request.headers.get("Authorization")
-if (!auth || !auth.startsWith("Bearer ")) {
+### Authentication Check (Python Backend)
+```python
+auth = request.headers.get("Authorization")
+if not auth or not auth.startswith("Bearer "):
     raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-}
+
+token = auth.split(" ")[1]
+token_manager.validate_token(token)  # Validates and handles token refresh
 ```
 
 ### Supabase Operations
@@ -178,7 +222,7 @@ const { data, error } = await supabase
 if (error) throw new Error(`Operation failed: ${error.message}`)
 ```
 
-### API Error Handling
+### API Error Handling (Python Backend)
 ```python
 try:
     # API operation
@@ -189,4 +233,32 @@ except Exception as e:
         status_code=500,
         detail=api_error_handler.get_user_friendly_error(500, str(e))
     )
+```
+
+### n8n API Calls with Fallback (Frontend)
+```javascript
+try {
+  const result = await n8nApi.makeRequest('endpoint-name', data);
+  if (result.success) {
+    // Handle success
+  }
+} catch (error) {
+  // Automatically falls back to mock response for development
+  console.error('n8n workflow failed:', error);
+}
+```
+
+### RapidAPI Video Conversion Pattern (Backend)
+```python
+# Use different APIs based on content type
+if request.content_type.lower() == "audio":
+    api_host = "youtube-mp3-audio-video-downloader.p.rapidapi.com"
+    endpoint = f"/get_m4a_download_link/{request.video_id}"
+else:
+    api_host = "youtube-video-fast-downloader-24-7.p.rapidapi.com" 
+    endpoint = f"/download_video/{request.video_id}"
+
+response = requests.get(f"https://{api_host}{endpoint}", 
+    headers={"X-RapidAPI-Key": rapidapi_key, "X-RapidAPI-Host": api_host},
+    timeout=60)
 ```

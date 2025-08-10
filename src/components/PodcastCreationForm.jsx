@@ -58,6 +58,9 @@ export default function PodcastCreationForm({ channelData, prefillData, onSubmit
     keywords: prefillData?.keywords || '',
     fundingUrl: prefillData?.fundingUrl || '',
     trailerUrl: prefillData?.trailerUrl || '',
+    
+    // Distribution Settings
+    distributionType: prefillData?.distributionType || 'audio',
     ...prefillData
   });
 
@@ -138,6 +141,9 @@ export default function PodcastCreationForm({ channelData, prefillData, onSubmit
       ...formData,
       channelId: channelData?.id,
       userId: safeGetItem('user_info', {}).id,
+      // Ensure both camelCase and snake_case versions for compatibility
+      distribution_type: formData.distributionType, // Database field name
+      distributionType: formData.distributionType,   // API field name
       // Include the final artwork URL or file data (Megaphone uses 'imageFile')
       finalArtworkUrl: formData.useChannelArtwork ? formData.imageFile : null,
       customArtworkData: !formData.useChannelArtwork && formData.customArtwork ? {
@@ -581,6 +587,41 @@ export default function PodcastCreationForm({ channelData, prefillData, onSubmit
                   <option key={lang.code} value={lang.code}>{lang.name}</option>
                 ))}
               </select>
+            </div>
+
+            {/* Distribution Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Distribution Type *
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                  <input
+                    type="radio"
+                    value="audio"
+                    checked={formData.distributionType === 'audio'}
+                    onChange={(e) => handleInputChange('distributionType', e.target.value)}
+                    className="mr-3 text-indigo-600"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-900">Audio Only</span>
+                    <p className="text-xs text-gray-500">Convert videos to audio format for podcast platforms</p>
+                  </div>
+                </label>
+                <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                  <input
+                    type="radio"
+                    value="video"
+                    checked={formData.distributionType === 'video'}
+                    onChange={(e) => handleInputChange('distributionType', e.target.value)}
+                    className="mr-3 text-indigo-600"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-900">Video</span>
+                    <p className="text-xs text-gray-500">Keep video format for video podcast platforms</p>
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
 

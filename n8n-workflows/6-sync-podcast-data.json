@@ -5,7 +5,10 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "sync-podcast-data",
-        "responseMode": "responseNode"
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
       },
       "id": "webhook-start",
       "name": "Sync Podcast Data Webhook",
@@ -273,7 +276,28 @@
     {
       "parameters": {
         "respondWith": "allIncomingItems",
-        "options": {}
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET, POST, PUT, DELETE, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type, Authorization, Accept, Origin"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
       },
       "id": "webhook-response",
       "name": "Webhook Response",
@@ -404,6 +428,6 @@
   "staticData": null,
   "tags": [],
   "triggerCount": 0,
-  "updatedAt": "2024-07-25T14:00:00.000Z",
-  "versionId": "5"
+  "updatedAt": "2025-01-29T16:00:00.000Z",
+  "versionId": "6"
 }

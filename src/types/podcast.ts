@@ -35,6 +35,7 @@ export interface Podcast {
   episode_limit?: number;
   itunes_active?: boolean;
   slug?: string;
+  distribution_type?: 'audio' | 'video';
   
   // Timestamps
   created_at?: string;

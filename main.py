@@ -104,7 +104,60 @@ def list_user_videos(request: Request):
             
             videos_data = res2.json()
             
-            # Return structured response with channel info
+            # Step 3: Get privacy status for videos to filter out private/unlisted ones
+            video_items = videos_data.get("items", [])
+            if video_items:
+                # Extract video IDs for privacy check
+                video_ids = [item["snippet"]["resourceId"]["videoId"] for item in video_items]
+                video_ids_str = ",".join(video_ids)
+                
+                print(f"[DEBUG] Checking privacy status for {len(video_ids)} videos")
+                
+                # Get video details including privacy status
+                res3 = requests.get(
+                    f"{YOUTUBE_API_URL}/videos",
+                    params={
+                        "part": "status",
+                        "id": video_ids_str
+                    },
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=30
+                )
+                
+                if res3.status_code != 200:
+                    print(f"[WARNING] Failed to get video privacy status: {res3.text}")
+                    # Continue without filtering if privacy check fails
+                    privacy_data = {"items": []}
+                else:
+                    privacy_data = res3.json()
+                
+                # Create a mapping of video ID to privacy status
+                privacy_map = {}
+                for video_status in privacy_data.get("items", []):
+                    video_id = video_status["id"]
+                    privacy_status = video_status.get("status", {}).get("privacyStatus", "unknown")
+                    privacy_map[video_id] = privacy_status
+                
+                print(f"[DEBUG] Privacy status map: {privacy_map}")
+                
+                # Filter videos to only include public ones
+                public_videos = []
+                filtered_count = 0
+                
+                for item in video_items:
+                    video_id = item["snippet"]["resourceId"]["videoId"]
+                    privacy_status = privacy_map.get(video_id, "unknown")
+                    
+                    if privacy_status == "public":
+                        public_videos.append(item)
+                    else:
+                        filtered_count += 1
+                        print(f"[DEBUG] Filtering out {privacy_status} video: {video_id} - {item['snippet']['title']}")
+                
+                print(f"[INFO] Privacy filtering results: {len(public_videos)} public videos, {filtered_count} private/unlisted videos filtered out")
+                video_items = public_videos
+            
+            # Return structured response with channel info and only public videos
             return {
                 "channel": {
                     "id": channel_info["id"],
@@ -118,9 +171,13 @@ def list_user_videos(request: Request):
                     "description": item["snippet"]["description"],
                     "publishedAt": item["snippet"]["publishedAt"],
                     "thumbnail": item["snippet"]["thumbnails"]["high"]["url"] if "high" in item["snippet"]["thumbnails"] else item["snippet"]["thumbnails"]["default"]["url"]
-                } for item in videos_data.get("items", [])],
-                "totalResults": videos_data.get("pageInfo", {}).get("totalResults", 0),
-                "nextPageToken": videos_data.get("nextPageToken")
+                } for item in video_items],
+                "totalResults": len(video_items),  # Update to reflect filtered count
+                "nextPageToken": videos_data.get("nextPageToken"),
+                "privacyFiltered": {
+                    "publicVideos": len(video_items),
+                    "filteredOut": filtered_count if 'filtered_count' in locals() else 0
+                }
             }
                 
         except HTTPException:
@@ -158,6 +215,17 @@ def rapidapi_convert(request: ConversionRequest):
     # Debug logging
     print(f"[DEBUG] Converting video_id: {request.video_id}, content_type: {request.content_type}")
     print(f"[DEBUG] RapidAPI key present: {'Yes' if rapidapi_key != 'YOUR_RAPIDAPI_KEY' else 'No'}")
+    print(f"[INFO] Request details - Quality: {request.quality}, Title: {request.title}")
+    
+    # Check for known problematic videos and provide specific error handling
+    problematic_videos = {
+        "TSY_rupasDs": "This video may be private or have restricted access",
+        "fJ9zZ98txA0": "This video may have copyright restrictions or be unavailable"
+    }
+    
+    if request.video_id in problematic_videos:
+        print(f"[WARNING] Video {request.video_id} is known to cause issues: {problematic_videos[request.video_id]}")
+        # Still attempt conversion but with extra logging
     
     # Check if RapidAPI key is configured
     if rapidapi_key == "YOUR_RAPIDAPI_KEY":
@@ -182,18 +250,43 @@ def rapidapi_convert(request: ConversionRequest):
                         "X-RapidAPI-Key": rapidapi_key,
                         "X-RapidAPI-Host": audio_host
                     },
-                    timeout=60
+                    timeout=90  # Increased timeout due to service issues
                 )
                 print(f"[DEBUG] Audio API response status: {download_response.status_code}")
                 
                 if download_response.status_code != 200:
+                    error_detail = f"Audio conversion failed: {download_response.text}"
+                    
+                    # Provide specific error messages for common issues
+                    if download_response.status_code == 404:
+                        error_detail = f"Video {request.video_id} not found or is private/unlisted"
+                    elif download_response.status_code == 403:
+                        error_detail = f"Video {request.video_id} access denied - may have copyright restrictions"
+                    elif download_response.status_code == 429:
+                        error_detail = "Rate limit exceeded - please try again later"
+                    elif "private" in download_response.text.lower():
+                        error_detail = f"Video {request.video_id} is private and cannot be accessed"
+                    elif "copyright" in download_response.text.lower():
+                        error_detail = f"Video {request.video_id} has copyright restrictions"
+                        
                     raise HTTPException(
                         status_code=502,
-                        detail=f"Audio conversion failed: {download_response.text}"
+                        detail=error_detail
                     )
                     
+            except requests.exceptions.Timeout:
+                print(f"[ERROR] Audio API request timed out for: {request.video_id}")
+                raise HTTPException(
+                    status_code=504,
+                    detail=f"Audio conversion timed out - RapidAPI service may be slow. Please try again."
+                )
             except requests.exceptions.RequestException as e:
                 print(f"[ERROR] Audio API request failed: {e}")
+                if "Read timed out" in str(e):
+                    raise HTTPException(
+                        status_code=504,
+                        detail="Audio conversion service is experiencing delays. Please try again in a few minutes."
+                    )
                 raise HTTPException(
                     status_code=502,
                     detail=f"Audio API request failed: {str(e)}"
@@ -215,18 +308,43 @@ def rapidapi_convert(request: ConversionRequest):
                         "X-RapidAPI-Key": rapidapi_key,
                         "X-RapidAPI-Host": video_host
                     },
-                    timeout=60
+                    timeout=90  # Increased timeout due to service issues
                 )
                 print(f"[DEBUG] Video API response status: {download_response.status_code}")
                 
                 if download_response.status_code != 200:
+                    error_detail = f"Video conversion failed: {download_response.text}"
+                    
+                    # Provide specific error messages for common issues
+                    if download_response.status_code == 404:
+                        error_detail = f"Video {request.video_id} not found or is private/unlisted"
+                    elif download_response.status_code == 403:
+                        error_detail = f"Video {request.video_id} access denied - may have copyright restrictions"
+                    elif download_response.status_code == 429:
+                        error_detail = "Rate limit exceeded - please try again later"
+                    elif "private" in download_response.text.lower():
+                        error_detail = f"Video {request.video_id} is private and cannot be accessed"
+                    elif "copyright" in download_response.text.lower():
+                        error_detail = f"Video {request.video_id} has copyright restrictions"
+                        
                     raise HTTPException(
                         status_code=502,
-                        detail=f"Video conversion failed: {download_response.text}"
+                        detail=error_detail
                     )
                     
+            except requests.exceptions.Timeout:
+                print(f"[ERROR] Video API request timed out for: {request.video_id}")
+                raise HTTPException(
+                    status_code=504,
+                    detail=f"Video conversion timed out - RapidAPI service may be slow. Please try again."
+                )
             except requests.exceptions.RequestException as e:
                 print(f"[ERROR] Video API request failed: {e}")
+                if "Read timed out" in str(e):
+                    raise HTTPException(
+                        status_code=504,
+                        detail="Video conversion service is experiencing delays. Please try again in a few minutes."
+                    )
                 raise HTTPException(
                     status_code=502,
                     detail=f"Video API request failed: {str(e)}"
@@ -235,6 +353,8 @@ def rapidapi_convert(request: ConversionRequest):
         # Handle response from either API
         print(f"[DEBUG] API response status: {download_response.status_code}")
         print(f"[DEBUG] API response headers: {dict(download_response.headers)}")
+        print(f"[DEBUG] Response content length: {len(download_response.content) if download_response.content else 0}")
+        print(f"[DEBUG] Response text preview: {download_response.text[:200] if download_response.text else 'No text'}")
         
         if download_response.status_code == 200:
             try:
@@ -293,7 +413,7 @@ def rapidapi_convert(request: ConversionRequest):
         print(f"[ERROR] Timeout error for video_id: {request.video_id}")
         raise HTTPException(
             status_code=504,
-            detail="Conversion request timed out. Please try again."
+            detail=f"Video conversion timed out for {request.video_id}. The RapidAPI service may be experiencing delays. Please try again in a few minutes."
         )
     except requests.exceptions.RequestException as e:
         print(f"[ERROR] Request error for video_id: {request.video_id}, error: {str(e)}")
@@ -301,20 +421,42 @@ def rapidapi_convert(request: ConversionRequest):
             status_code=502,
             detail=f"External API request failed: {str(e)}"
         )
+    except HTTPException as http_exc:
+        # Re-raise HTTPExceptions with more detail
+        print(f"[ERROR] HTTPException for video_id: {request.video_id}")
+        print(f"[ERROR] Status: {http_exc.status_code}, Detail: {http_exc.detail}")
+        raise http_exc
     except Exception as e:
         error_msg = str(e) if str(e) else f"Unknown error: {type(e).__name__}"
         print(f"[ERROR] Unexpected error for video_id: {request.video_id}, error: {error_msg}")
         print(f"[ERROR] Exception type: {type(e)}")
         print(f"[ERROR] Exception args: {e.args}")
+        # Add more debugging for HTTPExceptions caught here
+        if isinstance(e, HTTPException):
+            print(f"[ERROR] This was an HTTPException with status: {e.status_code}, detail: {e.detail}")
         raise HTTPException(
             status_code=500,
             detail=f"Conversion service error: {error_msg}"
         )
 
-# 📥 Serve previously downloaded file
+# 📥 Serve previously downloaded file  
 @app.get("/download/{filename}")
 def download(filename: str):
-    file_path = os.path.join(DOWNLOADS_DIR, filename)
+    downloads_dir = os.path.join(os.getcwd(), "downloads")
+    file_path = os.path.join(downloads_dir, filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path, media_type="video/mp4", filename=filename)
+
+# Run the server
+if __name__ == "__main__":
+    import uvicorn
+    import os
+    
+    # Get port from environment variable (required for Render deployment)
+    port = int(os.getenv("PORT", 8000))
+    
+    print("🚀 Starting YouTube to MP4 Conversion API Server...")
+    print(f"📡 Server will be available at: http://0.0.0.0:{port}")
+    print(f"📊 Health check: http://0.0.0.0:{port}/health")
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")

@@ -1,10 +1,17 @@
 // Clean n8n API service - replaces all direct API calls
 import { toast } from 'react-toastify';
 import { savePodcastDetails, savePayoutDetails } from './supabase';
+import N8N_CONFIG from '../utils/n8nConfig';
 
 // n8n Configuration
 const N8N_BASE_URL = process.env.REACT_APP_N8N_BASE_URL || 'https://n8n-6s78.onrender.com/';
-const USE_TEST_WEBHOOKS = process.env.REACT_APP_USE_TEST_WEBHOOKS !== 'false'; // Default to true for testing
+// Switch back to production webhooks
+const USE_TEST_WEBHOOKS = false; // Use production webhooks
+console.log('🚀 PRODUCTION WEBHOOK CONFIG:', {
+  REACT_APP_USE_TEST_WEBHOOKS: process.env.REACT_APP_USE_TEST_WEBHOOKS,
+  USE_TEST_WEBHOOKS: USE_TEST_WEBHOOKS,
+  USING_PRODUCTION: true
+});
 const DEV_MODE = process.env.REACT_APP_DEV_MODE === 'true';
 // Use mock mode only if explicitly enabled
 const USE_MOCK_MODE = DEV_MODE;
@@ -25,14 +32,15 @@ class N8nApiService {
   }
 
   async makeRequest(endpoint, data) {
-    // Use test webhook only for create-episodes, production webhooks for others
+    // Use test or production webhooks based on configuration
     const baseUrl = this.baseURL.endsWith('/') ? this.baseURL.slice(0, -1) : this.baseURL;
-    const webhookType = endpoint === 'create-episodes' ? 'webhook-test' : 'webhook';
+    const webhookType = this.useTestWebhooks ? 'webhook-test' : 'webhook';
     const targetUrl = `${baseUrl}/${webhookType}/${endpoint}`;
       
     console.log(`📡 Making request to endpoint: ${endpoint}`, {
       USE_MOCK_MODE,
       DEV_MODE,
+      useTestWebhooks: this.useTestWebhooks,
       n8nBaseUrl: baseUrl,
       webhookType,
       targetUrl,
@@ -49,17 +57,22 @@ class N8nApiService {
     }
     
     try {
-      const webhookLabel = endpoint === 'create-episodes' ? 'TEST' : 'PRODUCTION';
-      console.log(`🌐 Calling n8n ${webhookLabel} webhook: ${targetUrl}`);
+      console.log(`🌐 Calling n8n ${this.useTestWebhooks ? 'TEST' : 'PRODUCTION'} webhook: ${targetUrl}`);
       
-      // Add timeout to prevent hanging
+      // Set timeout based on endpoint using configuration
+      const isLongRunning = N8N_CONFIG.isLongRunning(endpoint);
+      const timeoutDuration = N8N_CONFIG.getTimeout(endpoint);
+      
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
       
       const response = await fetch(targetUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          // Add origin header to help with CORS debugging
+          'Origin': window.location.origin
         },
         body: JSON.stringify(data),
         signal: controller.signal
@@ -140,25 +153,19 @@ class N8nApiService {
     } catch (error) {
       console.error(`n8n API error for ${endpoint}:`, error);
       
-      // Fall back to mock for network/CORS failures (common in development)
-      if (error.message.includes('Failed to fetch') || 
-          error.message.includes('NetworkError') ||
-          error.message.includes('CORS') ||
-          error.name === 'AbortError' ||
-          error.message.includes('fetch')) {
-        console.warn('🔄 Network/CORS error, falling back to mock response');
-        toast.info('Using offline mode - n8n server not available or CORS issue');
+      // Use configuration helper for better error handling
+      console.warn(`⏰ Request error for ${endpoint}:`, error.message);
+      
+      // Check if we should fall back to mock
+      if (N8N_CONFIG.shouldFallbackToMock(error, endpoint, DEV_MODE)) {
+        console.warn('🔄 Using offline mode due to connection issue');
+        toast.info(`Connection issue detected - using offline mode for ${endpoint}`);
         return this.getMockResponse(endpoint, data);
       }
       
-      // Better error messages
-      if (error.message.includes('HTTP 404')) {
-        throw new Error('Workflow not found. Please ensure n8n workflows are properly set up.');
-      } else if (error.message.includes('HTTP 500')) {
-        throw new Error('Server error occurred. Please try again in a moment.');
-      } else {
-        throw new Error(`n8n workflow failed: ${error.message}`);
-      }
+      // Get user-friendly error message
+      const userError = N8N_CONFIG.getUserFriendlyError(error, endpoint);
+      throw new Error(userError);
     }
   }
   
@@ -296,23 +303,18 @@ class N8nApiService {
       case 'create-episodes':
         const videoObjects = data.videoObjects || [];
         return {
-          success: true,
-          results: videoObjects.map(video => ({
-            videoId: video.videoId,
+          results: videoObjects.map((video, index) => ({
             episodeId: `mock_episode_${video.videoId}`,
+            megaphoneEpisodeId: `mock_megaphone_${video.videoId}`,
+            videoId: video.videoId,
+            title: video.title || `Mock Episode for ${video.videoId}`,
             status: 'created',
-            title: video.title || `Mock Episode for ${video.videoId}`
-          })),
-          summary: {
-            total: videoObjects.length,
-            successful: videoObjects.length,
-            failed: 0
-          },
-          episodesSaved: videoObjects.map(video => ({
-            id: `episode_${video.videoId}`,
-            title: video.title || `Episode from video ${video.videoId}`,
-            status: 'published',
-            created_at: new Date().toISOString()
+            downloadUrl: `https://traffic.megaphone.fm/MOCK${Math.random().toString().slice(2, 12)}.mp3`,
+            supabaseId: `mock_episode_${video.videoId}`,
+            megaphoneUid: `MOCKUID${Math.random().toString().slice(2, 12)}`,
+            publishedAt: video.publishedAt || new Date(Date.now() - index * 86400000).toISOString(),
+            processedAt: new Date().toISOString(),
+            error: null
           }))
         };
         
@@ -831,6 +833,9 @@ export const fetchEpisodes = (podcastId, userId) =>
   n8nApi.fetchEpisodes(podcastId, userId);
 export const createEpisodes = (podcastId, videoIds, userId) => 
   n8nApi.createEpisodes(podcastId, videoIds, userId);
+
+export const getEpisodeStatus = (podcastId, episodeId) => 
+  n8nApi.makeRequest('get-episode-status', { podcastId, episodeId });
 
 export const setupUser = (googleToken, userInfo) => 
   n8nApi.setupUser(googleToken, userInfo);

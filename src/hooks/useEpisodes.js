@@ -6,7 +6,8 @@ export function useEpisodes(megaphoneId) {
     loading: false,
     error: null,
     episodes: [],
-    totalCount: 0
+    totalCount: 0,
+    n8nEpisodes: [] // Track n8n episodes separately
   });
 
   useEffect(() => {
@@ -31,7 +32,20 @@ export function useEpisodes(megaphoneId) {
       const result = await episodeService.getEpisodesFromSupabase(podcastId);
       
       if (result.success) {
-        const transformedEpisodes = episodeService.transformEpisodeData(result.episodes);
+        console.log('📊 Raw episodes from Supabase:', result.episodes);
+        let transformedEpisodes = episodeService.transformEpisodeData(result.episodes);
+        console.log('🔄 Transformed episodes:', transformedEpisodes.map(ep => ({ 
+          id: ep.id, 
+          title: ep.title, 
+          status: ep.status, 
+          source: ep.source 
+        })));
+        
+        // TODO: Enrich episodes with Megaphone API status when n8n proxy is ready
+        // For now, skip Megaphone API calls due to CORS restrictions
+        console.log('⚠️ Megaphone API enrichment temporarily disabled due to CORS restrictions');
+        console.log('💡 Use n8n proxy workflow to enable real-time status updates');
+        
         setState(s => ({ 
           ...s, 
           episodes: transformedEpisodes, 
@@ -54,14 +68,74 @@ export function useEpisodes(megaphoneId) {
     }
   };
 
-  const refreshEpisodes = () => {
+  const refreshEpisodes = async () => {
     if (megaphoneId) {
-      loadEpisodes();
+      await loadEpisodes();
     }
+  };
+
+  // Add newly created episodes from n8n workflow results
+  const addN8nEpisodes = (n8nResults, originalVideoData = null) => {
+    console.log('📺 Adding n8n episodes to display:', n8nResults);
+    
+    if (!n8nResults || !Array.isArray(n8nResults)) {
+      console.warn('Invalid n8n results provided:', n8nResults);
+      return;
+    }
+
+    // Transform n8n data for display, optionally with original video data for better titles
+    const transformedN8nEpisodes = episodeService.transformN8nEpisodeData(n8nResults, originalVideoData);
+    
+    setState(s => {
+      // Remove any existing n8n episodes with same IDs to avoid duplicates
+      const existingEpisodes = s.episodes.filter(ep => ep.source !== 'n8n');
+      const combinedEpisodes = [...transformedN8nEpisodes, ...existingEpisodes];
+      
+      console.log(`✅ Added ${transformedN8nEpisodes.length} n8n episodes to display`);
+      
+      return {
+        ...s,
+        episodes: combinedEpisodes,
+        n8nEpisodes: transformedN8nEpisodes,
+        totalCount: combinedEpisodes.length
+      };
+    });
+
+    // Refresh from Supabase after a delay to get the persisted data
+    setTimeout(async () => {
+      console.log('🔄 Refreshing episodes from Supabase after n8n creation...');
+      console.log('📊 Current episodes before refresh:', transformedN8nEpisodes.map(ep => ({ id: ep.id, videoId: ep.videoId, source: ep.source })));
+      
+      // Store the video IDs of newly created episodes for comparison
+      const newlyCreatedVideoIds = transformedN8nEpisodes.map(ep => ep.videoId);
+      console.log('🎯 Newly created video IDs:', newlyCreatedVideoIds);
+      
+      // Clear all n8n episodes first
+      setState(s => ({
+        ...s,
+        episodes: s.episodes.filter(ep => ep.source !== 'n8n'),
+        n8nEpisodes: []
+      }));
+      
+      // Then refresh from Supabase to get the permanent data
+      await refreshEpisodes();
+      console.log('✅ Removed temporary n8n episodes and refreshed from Supabase');
+    }, 5000); // Increased to 5 seconds to give Supabase more time to sync
+  };
+
+  // Clear n8n episodes (when they've been persisted to Supabase)
+  const clearN8nEpisodes = () => {
+    setState(s => ({
+      ...s,
+      n8nEpisodes: [],
+      episodes: s.episodes.filter(ep => ep.source !== 'n8n')
+    }));
   };
 
   return {
     ...state,
-    refreshEpisodes
+    refreshEpisodes,
+    addN8nEpisodes,
+    clearN8nEpisodes
   };
 }

@@ -27,16 +27,25 @@
     }
   ],
   "connections": {
-    "Health Check Webhook": {
+    "webhook-health": {
       "main": [
         [
           {
-            "node": "Health Response",
+            "node": "health-response",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
-  }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-01-29T16:00:00.000Z",
+  "versionId": "2"
 }

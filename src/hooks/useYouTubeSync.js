@@ -129,7 +129,16 @@ export function useYouTubeSync() {
       return;
     }
     
-    setState(s => ({ ...s, loading: true, progress: 0, total: videos.length, done: false, episodes: [], status: 'Creating podcast episodes...' }));
+    setState(s => ({ 
+      ...s, 
+      loading: true, 
+      progress: 0, 
+      total: videos.length, 
+      done: false, 
+      episodes: [], 
+      error: null, // Clear any previous errors
+      status: 'Creating podcast episodes...' 
+    }));
     
     // Try multiple sources for podcast ID - prioritize megaphone_id for API calls
     let podcastId = state.podcastId || localStorage.getItem('podcastId');
@@ -163,25 +172,90 @@ export function useYouTubeSync() {
       console.log('👤 Using user ID:', userInfo.id);
       
       // Get user's podcast preference for audio/video from Supabase data
-      const currentPodcast = safeGetItem('currentPodcast', {});
+      // FORCE fresh data from database - clear localStorage first
+      console.log('🧹 Clearing localStorage podcast data to force fresh fetch...');
+      localStorage.removeItem('currentPodcast');
+      
+      let currentPodcast = {};
+      
+      console.log('🔄 FORCING fresh podcast data fetch from database...');
+      console.log('🔍 Looking for podcast with megaphone_id:', podcastId);
+      console.log('👤 User ID:', userInfo.id);
+      
+      try {
+        const { getUserPodcasts } = await import('../services/supabase');
+        const userPodcasts = await getUserPodcasts(userInfo.id);
+        console.log('📊 All user podcasts from database:', userPodcasts);
+        console.log('🔍 Raw podcast data with distribution_type:', userPodcasts.map(p => ({ 
+          megaphone_id: p.megaphone_id, 
+          distribution_type: p.distribution_type, 
+          title: p.title 
+        })));
+        
+        const freshPodcast = userPodcasts.find(p => p.megaphone_id === podcastId);
+        console.log('🎯 Found matching podcast:', freshPodcast);
+        
+        if (freshPodcast) {
+          console.log('📝 Fresh podcast distribution_type:', freshPodcast.distribution_type);
+          console.log('📝 Fresh podcast object keys:', Object.keys(freshPodcast));
+          currentPodcast = freshPodcast;
+          localStorage.setItem('currentPodcast', JSON.stringify(freshPodcast));
+          console.log('✅ Refreshed podcast data from database and updated localStorage');
+        } else {
+          console.error('❌ Podcast not found in database!');
+          console.log('🔍 Available podcast IDs:', userPodcasts.map(p => p.megaphone_id));
+          console.log('🔍 Looking for ID:', podcastId);
+          // Fallback to first podcast if exact match not found
+          if (userPodcasts.length > 0) {
+            currentPodcast = userPodcasts[0];
+            console.log('⚠️ Using first available podcast as fallback:', currentPodcast);
+          }
+        }
+      } catch (error) {
+        console.error('❌ FAILED to refresh podcast data:', error);
+      }
+      
+      console.log('📊 Full currentPodcast object:', currentPodcast);
+      console.log('🔍 Checking distribution_type field:', currentPodcast.distribution_type);
+      console.log('🔍 Checking distributionType field:', currentPodcast.distributionType);
+      
       const distributionType = currentPodcast.distribution_type || currentPodcast.distributionType || 'audio'; // Check both field names, default to audio
       
-      console.log('🎧 Distribution type from podcast data:', distributionType);
+      console.log('🎧 Final distribution type used:', distributionType);
+      console.log('❗ ALERT: If this still shows "audio", check console for database logs above!');
+      
+      // TEMPORARY MANUAL OVERRIDE FOR TESTING
+      const FORCE_VIDEO_MODE = true;
+      if (FORCE_VIDEO_MODE) {
+        console.log('🔥 FORCING distribution type to "video" for testing!');
+        const finalDistributionType = 'video';
+        console.log('✅ Overridden distribution type:', finalDistributionType);
+      } else {
+        const finalDistributionType = distributionType;
+      }
+      
+      // Use finalDistributionType instead of distributionType
+      const finalDistributionType = FORCE_VIDEO_MODE ? 'video' : distributionType;
       
       // Call n8n episode creation workflow with full video data
       console.log('🚀 About to call n8n createEpisodes API with full video data');
-      const result = await createEpisodes(podcastId, videoObjects, userInfo.id, distributionType);
+      console.log('🎯 Using finalDistributionType:', finalDistributionType);
+      const result = await createEpisodes(podcastId, videoObjects, userInfo.id, finalDistributionType);
       
       console.log('📤 createEpisodes result:', result);
       
       if (result && result.success) {
-        const { successful, failed, total } = result.summary;
+        const { successful, failed, total } = result.summary || { successful: 0, failed: 0, total: 0 };
+        
+        // Handle different response structures - n8n can return 'episodes' or 'results'
+        const episodeData = result.episodes || result.results || [];
+        console.log('🔍 Episode data found:', episodeData);
         
         // Update state with episode results
-        const episodes = result.results.map(r => ({
+        const episodes = episodeData.map(r => ({
           id: r.videoId,
           title: r.title,
-          publishedAt: new Date().toISOString(),
+          publishedAt: r.publishedAt || new Date().toISOString(),
           mp4Url: `https://youtube.com/watch?v=${r.videoId}`,
           publishedToMegaphone: r.status === 'created',
           error: r.status === 'failed' ? 'Episode creation failed' : undefined
@@ -197,7 +271,12 @@ export function useYouTubeSync() {
           status: `Sync complete! ${successful} successful, ${failed} failed` 
         }));
         
-        return result;
+        // Return the result with consistent structure
+        return {
+          ...result,
+          episodes: episodeData, // Ensure episodes are accessible
+          results: episodeData   // Keep both for backward compatibility
+        };
       } else {
         const errorMsg = result?.error || result?.message || 'Episode creation failed - no response from server';
         console.error('❌ Episode creation failed:', result);
@@ -206,7 +285,14 @@ export function useYouTubeSync() {
       
     } catch (err) {
       console.error('Episode creation process failed:', err);
-      setState(s => ({ ...s, error: err.message, loading: false, status: '' }));
+      setState(s => ({ 
+        ...s, 
+        error: err.message, 
+        loading: false, 
+        status: '', 
+        episodes: [], // Clear any partial episodes on error
+        done: false 
+      }));
       toast.error('Episode creation failed: ' + err.message);
       throw err;
     }

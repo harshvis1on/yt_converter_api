@@ -24,6 +24,7 @@ export default function PodcastPage({ userInfo }) {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedContentTypes, setSelectedContentTypes] = useState(['videos', 'shorts', 'livestreams']);
   const [isCreatingEpisodes, setIsCreatingEpisodes] = useState(false);
+  const [creatingEpisodeCount, setCreatingEpisodeCount] = useState(0);
   
   // Show loading state (after all hooks are called)
   if (loading) {
@@ -260,9 +261,20 @@ export default function PodcastPage({ userInfo }) {
 
           {/* Podcast Info */}
           <div className="flex-1">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">
-              {podcast.title}
-            </h1>
+            <div className="flex items-center justify-between mb-2">
+              <h1 className="text-4xl font-bold text-gray-900">
+                {podcast.title}
+              </h1>
+              <button
+                onClick={() => setShowYouTubeSync(true)}
+                className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Sync Videos
+              </button>
+            </div>
             
             {/* Subtitle */}
             <p className="text-xl text-gray-600 mb-4">
@@ -352,14 +364,44 @@ export default function PodcastPage({ userInfo }) {
             {/* Episode Creation Status */}
             {isCreatingEpisodes && (
               <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <div className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <div className="flex items-start space-x-3">
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600 mt-0.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <div>
-                    <h4 className="text-sm font-medium text-blue-900">Creating Episodes</h4>
-                    <p className="text-sm text-blue-700">Converting your selected YouTube videos into podcast episodes...</p>
+                  <div className="flex-1">
+                    <h4 className="text-sm font-medium text-blue-900 mb-1">Creating Episodes</h4>
+                    <p className="text-sm text-blue-700 mb-3">Converting your selected YouTube videos into podcast episodes...</p>
+                    
+                    {/* Progress Info */}
+                    <div className="bg-white bg-opacity-60 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-blue-800 font-medium">Processing {creatingEpisodeCount} videos</span>
+                        <span className="text-blue-600">⏱️ This may take 2-3 minutes</span>
+                      </div>
+                      
+                      {/* Animated progress bar */}
+                      <div className="w-full bg-blue-200 rounded-full h-1.5">
+                        <div className="bg-blue-600 h-1.5 rounded-full animate-pulse" style={{width: '60%'}}></div>
+                      </div>
+                      
+                      <div className="text-xs text-blue-600 space-y-1">
+                        <div>✓ Analyzing video content</div>
+                        <div>✓ Converting to audio format</div>
+                        <div className="text-blue-500">⏳ Publishing to Megaphone...</div>
+                        <div className="text-blue-400">⏳ Saving episode data...</div>
+                      </div>
+                    </div>
+                    
+                    {/* Keep working notice */}
+                    <div className="mt-3 p-2 bg-blue-100 rounded-md">
+                      <p className="text-xs text-blue-700 flex items-center">
+                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                        </svg>
+                        You can continue using the app while episodes are being created
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -405,13 +447,7 @@ export default function PodcastPage({ userInfo }) {
                       Format
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Pre-rolls
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Mid-rolls
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Post-rolls
+                      Ad Spots
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Action
@@ -424,17 +460,38 @@ export default function PodcastPage({ userInfo }) {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center space-x-3">
                           <input type="checkbox" className="w-4 h-4 text-blue-600 border-gray-300 rounded" />
-                          <div className="flex items-center space-x-2">
-                            <span className="text-sm font-medium text-gray-900">{episode.title}</span>
-                            {episode.youtubeUrl && (
-                              <a 
-                                href={episode.youtubeUrl} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="text-red-600 hover:text-red-700"
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm font-medium text-gray-900">{episode.title}</span>
+                              {episode.youtubeUrl && (
+                                <a 
+                                  href={episode.youtubeUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-red-600 hover:text-red-700"
+                                  title="View original YouTube video"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              )}
+                              {episode.downloadUrl && (
+                                <a 
+                                  href={episode.downloadUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-green-600 hover:text-green-700"
+                                  title="Download episode audio"
+                                >
+                                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l-3-3z" />
+                                  </svg>
+                                </a>
+                              )}
+                            </div>
+                            {episode.videoId && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                Video ID: {episode.videoId}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -442,15 +499,26 @@ export default function PodcastPage({ userInfo }) {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                           episode.status === 'Published' ? 'bg-green-100 text-green-800' :
+                          episode.status === 'Created' ? 'bg-blue-100 text-blue-800' :
                           episode.status === 'Failed' ? 'bg-red-100 text-red-800' :
-                          episode.status === 'Processing' ? 'bg-blue-100 text-blue-800' :
-                          'bg-yellow-100 text-yellow-800'
+                          episode.status === 'Processing' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-gray-100 text-gray-800'
                         }`}>
                           • {episode.status}
                         </span>
+                        {episode.isNew && (
+                          <div className="text-xs text-blue-600 mt-1">
+                            ✨ Just created
+                          </div>
+                        )}
                         {episode.error && (
                           <div className="text-xs text-red-600 mt-1" title={episode.error}>
                             Error occurred
+                          </div>
+                        )}
+                        {episode.megaphoneUid && (
+                          <div className="text-xs text-gray-500 mt-1" title="Megaphone UID">
+                            ID: {episode.megaphoneUid}
                           </div>
                         )}
                       </td>
@@ -463,13 +531,17 @@ export default function PodcastPage({ userInfo }) {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-                        {episode.preRolls}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-                        {episode.midRolls}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-                        {episode.postRolls}
+                        <div className="flex items-center space-x-2">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            Pre: {episode.preRolls}
+                          </span>
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            Mid: {episode.midRolls}
+                          </span>
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            Post: {episode.postRolls}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                         <button className="p-1 hover:text-gray-600">
@@ -493,9 +565,10 @@ export default function PodcastPage({ userInfo }) {
               <div className="flex gap-4 justify-center">
                 <button 
                   onClick={() => setShowYouTubeSync(true)}
-                  className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                  disabled={isCreatingEpisodes}
+                  className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  Sync YouTube Videos
+                  {isCreatingEpisodes ? 'Creating Episodes...' : 'Sync YouTube Videos'}
                 </button>
                 <button 
                   onClick={() => setShowUploadModal(true)}
@@ -743,23 +816,63 @@ export default function PodcastPage({ userInfo }) {
                     }
                     
                     console.log('✅ Button enabled, calling sync.createEpisodes()');
+                    
+                    // Store the count and close the modal immediately
+                    const episodeCount = sync.selectedVideos?.length || 0;
+                    setCreatingEpisodeCount(episodeCount);
+                    setShowYouTubeSync(false);
                     setIsCreatingEpisodes(true);
                     
+                    // Show immediate feedback
+                    toast.info(`Starting creation of ${episodeCount} episodes...`);
+                    
                     try {
-                      await sync.createEpisodes();
-                      setShowYouTubeSync(false);
-                      toast.success('Episodes created successfully!');
+                      const result = await sync.createEpisodes();
+                      console.log('🎉 Episode creation result:', result);
                       
-                      // Refresh episodes after creation
+                      // Add the newly created episodes to the display immediately
+                      // Handle different response structures - check for 'episodes' or 'results'
+                      const episodeData = result.episodes || result.results || [];
+                      
+                      if (result && result.success && episodeData.length > 0) {
+                        console.log('📺 Adding n8n episodes to display:', episodeData);
+                        // Pass the original video data for better episode titles
+                        const selectedVideoObjects = sync.videos?.filter(v => {
+                          const videoId = v.id || v.videoId;
+                          return sync.selectedVideos?.includes(videoId);
+                        }) || [];
+                        megaphoneEpisodes.addN8nEpisodes(episodeData, selectedVideoObjects);
+                        toast.success(`${episodeData.length} episodes created successfully!`);
+                      } else if (result && result.success) {
+                        toast.success('Episodes created successfully!');
+                      } else {
+                        console.warn('⚠️ Unexpected episode creation result:', result);
+                        toast.success('Episodes created - refreshing list...');
+                      }
+                      
+                      // Refresh episodes after creation to get persisted data
                       setTimeout(() => {
                         console.log('🔄 Refreshing episodes after creation...');
                         megaphoneEpisodes.refreshEpisodes();
                         setIsCreatingEpisodes(false);
-                      }, 2000);
+                        setCreatingEpisodeCount(0);
+                      }, 3000);
                     } catch (error) {
                       console.error('❌ Failed to create episodes:', error);
-                      toast.error('Failed to create episodes. Please try again.');
+                      
+                      // Better error messages based on error type
+                      if (error.message.includes('longer than expected')) {
+                        toast.warning('Episode creation is taking longer than usual. Please check back in a few minutes - your episodes may still be processing.');
+                      } else if (error.message.includes('Unable to connect')) {
+                        toast.error('Connection issue detected. Please check your internet connection and try again.');
+                      } else if (error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
+                        toast.error('Unable to connect to the workflow service. Please try again or contact support if the issue persists.');
+                      } else {
+                        toast.error(`Failed to create episodes: ${error.message}`);
+                      }
+                      
                       setIsCreatingEpisodes(false);
+                      setCreatingEpisodeCount(0);
                     }
                   }}
                   disabled={!sync.selectedVideos || sync.selectedVideos.length === 0 || isCreatingEpisodes}
