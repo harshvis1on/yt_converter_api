@@ -10,6 +10,20 @@ export function usePodcastData(userInfo: UserInfo | null) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // First check localStorage for existing podcast data
+    const storedPodcast = localStorage.getItem('currentPodcast');
+    if (storedPodcast && !currentPodcast) {
+      try {
+        const parsedPodcast = JSON.parse(storedPodcast);
+        setCurrentPodcast(parsedPodcast);
+        console.log('📱 Restored podcast from localStorage:', parsedPodcast.title);
+      } catch (error) {
+        console.error('Error parsing stored podcast:', error);
+        // Clear corrupted data
+        localStorage.removeItem('currentPodcast');
+      }
+    }
+
     if (!userInfo?.id) {
       setLoading(false);
       return;
@@ -21,6 +35,17 @@ export function usePodcastData(userInfo: UserInfo | null) {
         setError(null);
         
         console.log('🎙️ Fetching podcasts for user:', userInfo.id);
+        
+        // First, sync podcast data from Megaphone to ensure we have fresh data
+        try {
+          const { syncPodcastDataFromMegaphone } = await import('../services/n8nApi');
+          console.log('🔄 Syncing podcast data from Megaphone before fetching...');
+          await syncPodcastDataFromMegaphone(userInfo.id);
+          console.log('✅ Podcast data synced from Megaphone');
+        } catch (syncError) {
+          console.warn('⚠️ Failed to sync from Megaphone (non-critical):', syncError);
+        }
+        
         const userPodcasts = await getUserPodcasts(userInfo.id);
         
         setPodcasts(userPodcasts);
@@ -30,6 +55,9 @@ export function usePodcastData(userInfo: UserInfo | null) {
           setCurrentPodcast(userPodcasts[0]);
           // Also store in localStorage for other components
           localStorage.setItem('currentPodcast', JSON.stringify(userPodcasts[0]));
+        } else if (!storedPodcast) {
+          // Only clear if there's no stored podcast data
+          setCurrentPodcast(null);
         }
         
         console.log('✅ Podcasts loaded:', userPodcasts.length);
